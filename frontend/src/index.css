@@ -1,0 +1,18 @@
+/* src/index.css */
+:root {
+  /* Forest Corporate Palette */
+  --color-primary: #10b981;
+  --color-primary-hover: #15803d;
+  --color-bg-app: #f9fafb;
+  --color-bg-surface: #ffffff;
+  --color-text-main: #1f2937;
+  --color-text-header: #111827;
+  --color-border: #e5e7eb;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif; /* Add Inter font in index.html */
+  background-color: var(--color-bg-app);
+  color: var(--color-text-main);
+}
