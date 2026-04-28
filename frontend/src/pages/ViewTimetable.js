@@ -298,16 +298,16 @@ function ViewTimetable() {
         return;
       }
 
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/check-clash`); {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          timetable: editedTT,
-          existing_timetables: existing,
-          changed_slots: changed,
-          current_id: decodedId
-        })
-      });
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/check-clash`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    timetable: editedTT,
+    existing_timetables: existing,
+    changed_slots: changed,
+    current_id: decodedId
+  })
+});
 
       const data = await res.json();
 

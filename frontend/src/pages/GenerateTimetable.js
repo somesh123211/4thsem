@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+
 import {
   collection,
   getDocs,
@@ -13,6 +14,7 @@ import {
   Droppable,
   Draggable
 } from "@hello-pangea/dnd";
+const API = process.env.REACT_APP_API_URL;
 
 function GenerateTimetable() {
   const [year, setYear] = useState("");
@@ -152,11 +154,11 @@ function GenerateTimetable() {
 
       setTotalTimetables(snapshotTT.size);
 
-       const res = await fetch("http://127.0.0.1:5000/generate");{
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subjects, existing_timetables: existing })
-      });
+       const res = await fetch(`${API}/generate`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ subjects, existing_timetables: existing })
+});
 
       const data = await res.json();
       setTimetable(data.timetable);
@@ -211,16 +213,15 @@ function GenerateTimetable() {
       const className = year;
       const docId = `${department}_${className}`;
 
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/check-clash`); {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-  timetable: convertTimetable(timetable),
-  existing_timetables: existing,
-  changed_slots: [], // 🔥 FORCE FULL CHECK
-  current_id: docId
-})
-      });
+      const res = await fetch(`${API}/check-clash`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    timetable: convertTimetable(timetable),
+    existing_timetables: existing,
+    changed_slots: [],
+  })
+});
 
       const data = await res.json();
 
