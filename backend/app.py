@@ -2,6 +2,15 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from timetable_core import generate_timetable
 import os
+import urllib.request
+import json
+import random
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 app = Flask(__name__)
 
@@ -195,6 +204,170 @@ def check_clash():
                                     })
 
     return jsonify({"success": True})
+
+
+# ==========================================
+# 📧 BREVO OTP EMAIL VERIFICATION SYSTEM
+# ==========================================
+otp_store = {}  # In-memory store: { email: { "otp": "123456", "name": "Prof" } }
+
+def send_brevo_otp(email, name, otp):
+    api_key = os.environ.get("BREVO_API_KEY")
+    if not api_key:
+        print("BREVO_API_KEY not found in environment!")
+        return False
+        
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "api-key": api_key,
+        "content-type": "application/json",
+        "accept": "application/json"
+    }
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Email Verification</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: #f6f9fc;
+                padding: 40px 20px;
+                margin: 0;
+            }}
+            .card {{
+                max-width: 480px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border: 1px solid #e3e8ee;
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            }}
+            .logo {{
+                font-size: 20px;
+                font-weight: 700;
+                color: #6366F1;
+                margin-bottom: 24px;
+                text-align: center;
+            }}
+            .title {{
+                font-size: 22px;
+                font-weight: 700;
+                color: #262626;
+                margin-bottom: 16px;
+                text-align: center;
+            }}
+            .text {{
+                font-size: 15px;
+                line-height: 24px;
+                color: #4f566b;
+                margin-bottom: 32px;
+                text-align: center;
+            }}
+            .otp-container {{
+                background-color: #f1f5f9;
+                border-radius: 12px;
+                padding: 16px;
+                font-size: 32px;
+                font-weight: 800;
+                letter-spacing: 6px;
+                color: #0f172a;
+                text-align: center;
+                margin-bottom: 32px;
+                border: 1px dashed #cbd5e1;
+            }}
+            .footer {{
+                font-size: 13px;
+                color: #8898aa;
+                text-align: center;
+                border-top: 1px solid #e3e8ee;
+                padding-top: 24px;
+                margin-top: 32px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="logo">Smart Timetable Generator</div>
+            <div class="title">Verify Your Email Address</div>
+            <div class="text">
+                Hello {name if name else "Faculty Member"},<br><br>
+                Thank you for registering. Please use the following 6-digit One-Time Password (OTP) to complete your account verification:
+            </div>
+            <div class="otp-container">{otp}</div>
+            <div class="text" style="font-size: 13px; color: #7f8c8d;">
+                This verification code is valid for 10 minutes. If you did not request this registration code, please ignore this email.
+            </div>
+            <div class="footer">
+                &copy; 2026 Smart Timetable Generator. All rights reserved.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    payload = {
+        "sender": { "name": "Smart Timetable Generator", "email": "no-reply@timetable-generator.com" },
+        "to": [ { "email": email } ],
+        "subject": f"{otp} is your email verification code",
+        "htmlContent": html_content
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as res:
+            res_body = res.read().decode("utf-8")
+            print("Brevo send success:", res_body)
+            return True
+    except Exception as e:
+        print("Error sending email via Brevo:", str(e))
+        return False
+
+@app.route("/send-otp", methods=["POST"])
+def send_otp():
+    data = request.json or {}
+    email = data.get("email", "").strip().lower()
+    name = data.get("name", "").strip()
+    
+    if not email:
+        return jsonify({"success": False, "message": "Email is required"}), 400
+        
+    otp = str(random.randint(100000, 999999))
+    otp_store[email] = {
+        "otp": otp,
+        "name": name
+    }
+    
+    success = send_brevo_otp(email, name, otp)
+    if success:
+        return jsonify({"success": True, "message": "OTP sent successfully"})
+    else:
+        return jsonify({"success": False, "message": "Failed to send email verification code"}), 500
+
+@app.route("/verify-otp", methods=["POST"])
+def verify_otp():
+    data = request.json or {}
+    email = data.get("email", "").strip().lower()
+    otp = data.get("otp", "").strip()
+    
+    if not email or not otp:
+        return jsonify({"success": False, "message": "Email and OTP are required"}), 400
+        
+    stored = otp_store.get(email)
+    if stored and stored["otp"] == otp:
+        # OTP correct, pop it
+        otp_store.pop(email, None)
+        return jsonify({"success": True, "message": "Email verified successfully!"})
+        
+    return jsonify({"success": False, "message": "Invalid or expired verification code"}), 400
 
 
 if __name__ == "__main__":
