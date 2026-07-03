@@ -40,6 +40,7 @@ def build_constraints(existing_timetables):
 
                     teacher = entry.get("teacherId")
                     room = entry.get("room")
+                    is_lab = entry.get("type") == "lab" or "lab" in entry.get("subject", "").lower()
 
                     slots = entry.get("slot")
 
@@ -52,10 +53,16 @@ def build_constraints(existing_timetables):
                     for sl in slot_list:
 
                         if teacher:
-                            teacher_busy.setdefault(teacher, set()).add(sl)
+                            for t in teacher.split("/"):
+                                t_clean = t.strip()
+                                if t_clean:
+                                    teacher_busy.setdefault(t_clean, set()).add(sl)
 
-                        if room:
-                            room_busy.setdefault(room, set()).add(sl)
+                        if room and is_lab:
+                            for r in room.split("/"):
+                                r_clean = r.strip()
+                                if r_clean:
+                                    room_busy.setdefault(r_clean, set()).add(sl)
 
     return teacher_busy, room_busy
 
@@ -105,7 +112,10 @@ def get_lab(subject_name, subjects):
 def normalize(subjects):
     for s in subjects:
         s["type"] = str(s.get("type", "")).lower()
-        s["batch_required"] = str(s.get("batch_required", "")).lower()
+        batch_req = s.get("batch_required")
+        if batch_req is None:
+            batch_req = s.get("batchRequired")
+        s["batch_required"] = str(batch_req or "").lower()
         s["hours"] = int(s.get("hours", 0))
     return subjects
 
@@ -122,11 +132,20 @@ def is_theory(s):
     return s["type"] == "theory"
 
 
+def is_batch_theory(s):
+    return s["type"] == "theory" and s["batch_required"] in ["yes", "true", "1"]
+
+
 def get_batches(subjects):
+    max_batches = 1
     for s in subjects:
-        if is_batch_lab(s):
-            return int(s.get("batches", 1))
-    return 1
+        val = s.get("batches")
+        if val is not None:
+            try:
+                max_batches = max(max_batches, int(val))
+            except ValueError:
+                pass
+    return max_batches
 
 
 def empty_tt(batches):

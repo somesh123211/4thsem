@@ -6,6 +6,7 @@ import HODDashboard from "./pages/HODDashboard";
 import SubjectPage from "./pages/SubjectPage";
 import GenerateTimetable from "./pages/GenerateTimetable";
 import ViewTimetable from "./pages/ViewTimetable";
+import AdminPage from "./pages/AdminPage";
 
 function App() {
   return (
@@ -18,7 +19,7 @@ function App() {
         <Route path="/subjects/:year" element={<SubjectPage />} />
         <Route path="/generate" element={<GenerateTimetable />} />
         <Route path="/view/:id" element={<ViewTimetable />} />
-        
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </Router>
   );

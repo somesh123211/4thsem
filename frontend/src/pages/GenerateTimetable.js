@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   collection,
@@ -8,7 +9,7 @@ import {
   setDoc,
   getDoc
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, logActivity } from "../firebase";
 import {
   DragDropContext,
   Droppable,
@@ -17,6 +18,7 @@ import {
 const API = process.env.REACT_APP_API_URL;
 
 function GenerateTimetable() {
+  const navigate = useNavigate();
   const [year, setYear] = useState("");
   const [timetable, setTimetable] = useState(null);
   const [originalTT, setOriginalTT] = useState(null);
@@ -26,6 +28,13 @@ function GenerateTimetable() {
   const [canFinalize, setCanFinalize] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
+
+  useEffect(() => {
+    if (!user || user.role !== "hod") {
+      alert("Access Denied: HODs Only");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const days = ["M", "T", "W", "TH", "F", "S"];
 
@@ -150,7 +159,10 @@ function GenerateTimetable() {
         .filter(s => s.dept === user?.department && s.year === year);
 
       const snapshotTT = await getDocs(collection(db, "timetables"));
-      const existing = snapshotTT.docs.map(doc => doc.data());
+      const docId = `${user?.department}_${year}`;
+      const existing = snapshotTT.docs
+        .filter(doc => doc.id !== docId)
+        .map(doc => doc.data());
 
       setTotalTimetables(snapshotTT.size);
 
@@ -164,9 +176,10 @@ function GenerateTimetable() {
       setTimetable(data.timetable);
       setOriginalTT(JSON.parse(JSON.stringify(data.timetable))); // Track original layout
       setCanFinalize(true); // Allow saving right after a successful initial generation
-
+      await logActivity(user?.email || "hod", "Generate Timetable", `Successfully generated timetable for ${year} Year - ${user?.department}`);
     } catch (err) {
       console.error(err);
+      await logActivity(user?.email || "hod", "Generate Timetable Error", `Failed to generate for ${year} Year: ${err.message}`);
       alert("Backend error");
     }
     setLoading(false);
@@ -209,19 +222,27 @@ function GenerateTimetable() {
       
       
 
+      const changed = getChangedSlots();
+      if (changed.length === 0) {
+        alert("No changes detected.");
+        setCanFinalize(true);
+        return;
+      }
+
       const department = user?.department || "unknown";
       const className = year;
       const docId = `${department}_${className}`;
 
       const res = await fetch(`${API}/check-clash`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    timetable: convertTimetable(timetable),
-    existing_timetables: existing,
-    changed_slots: [],
-  })
-});
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timetable: convertTimetable(timetable),
+          existing_timetables: existing,
+          changed_slots: changed,
+          current_id: docId
+        })
+      });
 
       const data = await res.json();
 
@@ -229,7 +250,15 @@ function GenerateTimetable() {
         alert("✅ No Clash Found. You may finalize the timetable.");
         setCanFinalize(true);
       } else {
-        alert("❌ Clash Detected: " + data.message);
+        let clashMsg = data.message || "";
+        if (teacherMap) {
+          Object.keys(teacherMap).forEach((id) => {
+            if (clashMsg.includes(id)) {
+              clashMsg = clashMsg.replace(id, teacherMap[id]);
+            }
+          });
+        }
+        alert("❌ Clash Detected: " + clashMsg);
         setCanFinalize(false);
       }
     } catch (err) {
@@ -243,7 +272,14 @@ function GenerateTimetable() {
   // =========================
   const renderSlot = (entry) => {
     if (!entry) return null;
-    const teacherShort = teacherMap[entry.teacherId] || "NA";
+    let teacherShort = "NA";
+    if (entry.teacherId) {
+      const ids = entry.teacherId.split("/");
+      const names = ids.map(id => teacherMap[id.trim()] || id.trim());
+      teacherShort = names.join(" / ");
+    } else if (entry.teacher) {
+      teacherShort = entry.teacher;
+    }
     return (
       <div style={{ padding: "4px 0" }}>
         <div style={styles.subjectText}>{entry.subject}</div>
@@ -270,6 +306,14 @@ function GenerateTimetable() {
       // Utility to safely identify a 2-hour lab/project
       const isSameLab = (s1, s2) => {
         if (!s1 || !s2) return false;
+        const isLabSlot = (obj) => {
+          if (obj?.COMMON && obj.COMMON.type === "lab") return true;
+          for (let k in obj) {
+            if (k !== "COMMON" && obj[k] && obj[k].type === "lab") return true;
+          }
+          return false;
+        };
+        if (!isLabSlot(s1) || !isLabSlot(s2)) return false;
         if (Object.keys(s1).length === 0 || Object.keys(s2).length === 0) return false;
         const c1 = JSON.parse(JSON.stringify(s1));
         const c2 = JSON.parse(JSON.stringify(s2));
@@ -409,6 +453,7 @@ function GenerateTimetable() {
 
     // Reset tracker so 'changed slots' resolves correctly upon future checks
     setOriginalTT(JSON.parse(JSON.stringify(timetable)));
+    await logActivity(user?.email || "hod", "Finalize Timetable", `Saved and finalized timetable for ${year} Year - ${department}`);
     alert("✅ Timetable Saved Successfully!");
   };
 
@@ -463,6 +508,14 @@ function GenerateTimetable() {
                       
                       const isSameLab = (s1, s2) => {
                         if (!s1 || !s2) return false;
+                        const isLabSlot = (obj) => {
+                          if (obj?.COMMON && obj.COMMON.type === "lab") return true;
+                          for (let k in obj) {
+                            if (k !== "COMMON" && obj[k] && obj[k].type === "lab") return true;
+                          }
+                          return false;
+                        };
+                        if (!isLabSlot(s1) || !isLabSlot(s2)) return false;
                         if (Object.keys(s1).length === 0 || Object.keys(s2).length === 0) return false;
                         const c1 = JSON.parse(JSON.stringify(s1));
                         const c2 = JSON.parse(JSON.stringify(s2));

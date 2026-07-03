@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
   collection,
@@ -7,7 +7,7 @@ import {
   deleteDoc,
   doc
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, logActivity } from "../firebase";
 
 // ============================
 // 🎨 "DEEP ONYX" UI STYLES
@@ -307,8 +307,18 @@ function SubjectPage() {
   // ================== LOCK STATE ==================
   const [isLocked, setIsLocked] = useState(true);
 
+  const navigate = useNavigate();
+
   // ================== USER ==================
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const dept = user?.department;
+
+  useEffect(() => {
+    if (!user || user.role !== "hod") {
+      alert("Access Denied: HODs Only");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   // ============================================================
   // 🔥 FETCH USERS + ROOMS 
@@ -329,7 +339,7 @@ function SubjectPage() {
       const filteredFaculty = users.filter(
         u =>
           u.role === "faculty" &&
-          u.department?.toLowerCase() === user?.department?.toLowerCase()
+          u.department?.toLowerCase() === dept?.toLowerCase()
       );
 
       setFacultyList(filteredFaculty);
@@ -343,45 +353,81 @@ function SubjectPage() {
       setRooms(roomsData);
     };
 
-    if (user) fetchData();
-  }, [user]);
+    if (dept) fetchData();
+  }, [dept]);
 
   // ============================================================
   // 🔥 LOAD SUBJECTS FROM DATABASE
   // ============================================================
+  const fetchSubjects = async () => {
+    const snapshot = await getDocs(collection(db, "subjects"));
+
+    const data = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(s => s.dept === dept && s.year === year);
+
+    if (data.length > 0) {
+      const formatted = data.map(d => ({
+        id: d.id,
+        name: d.subject_name || "",
+        code: d.subject_code || "",
+        faculty: d.faculty_id || "",
+        otherDept: d.other_department || "",
+        otherFaculty: d.other_faculty_id || "",
+        type: d.type || "theory",
+        room: d.room || "",
+        batchRequired: d.batch_required || "no",
+        hours: String(d.hours || "")
+      }));
+
+      setSubjects(formatted);
+      setShowGrid(true);
+      setStudents(data[0].students);
+      setBatches(data[0].batches);
+    } else {
+      setSubjects([]);
+      setShowGrid(false);
+      setStudents("");
+      setBatches("");
+    }
+  };
+
   useEffect(() => {
-    if (!isLocked) return;
+    if (dept) {
+      fetchSubjects();
+      setIsLocked(true);
+    }
+  }, [dept, year]);
 
-    const fetchSubjects = async () => {
-      const snapshot = await getDocs(collection(db, "subjects"));
+  const handleReset = async () => {
+    const confirmReset = window.confirm("Are you sure you want to discard unsaved changes and reload the last saved configuration?");
+    if (!confirmReset) return;
+    await fetchSubjects();
+    setIsLocked(true);
+  };
 
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(s => s.dept === user?.department && s.year === year);
-
-      if (data.length > 0) {
-        const formatted = data.map(d => ({
-          id: d.id,
-          name: d.subject_name || "",
-          code: d.subject_code || "",
-          faculty: d.faculty_id || "",
-          otherDept: d.other_department || "",
-          otherFaculty: d.other_faculty_id || "",
-          type: d.type || "theory",
-          room: d.room || "",
-          batchRequired: d.batch_required || "no",
-          hours: String(d.hours || "")
-        }));
-
-        setSubjects(formatted);
-        setShowGrid(true);
-        setStudents(data[0].students);
-        setBatches(data[0].batches);
+  const handleAddNewRow = () => {
+    if (isLocked) return;
+    setSubjects(prev => [
+      ...prev,
+      {
+        name: "",
+        code: "",
+        faculty: "",
+        otherDept: "",
+        otherFaculty: "",
+        type: "theory",
+        room: "",
+        batchRequired: "no",
+        hours: ""
       }
-    };
+    ]);
+  };
 
-    if (user) fetchSubjects();
-  }, [user, year, isLocked]);
+  const handleRemoveRow = (index) => {
+    if (isLocked) return;
+    setSubjects(prev => prev.filter((_, idx) => idx !== index));
+  };
 
   // ============================================================
   // 🧱 CREATE GRID
@@ -434,7 +480,7 @@ function SubjectPage() {
       const snapshot = await getDocs(collection(db, "subjects"));
 
       const oldDocs = snapshot.docs.filter(
-        d => d.data().dept === user?.department && d.data().year === year
+        d => d.data().dept === dept && d.data().year === year
       );
 
       // DELETE OLD
@@ -445,7 +491,7 @@ function SubjectPage() {
       // INSERT NEW
       for (let sub of subjects) {
         await addDoc(collection(db, "subjects"), {
-          dept: user?.department,
+          dept,
           year,
           students,
           batches,
@@ -461,10 +507,12 @@ function SubjectPage() {
         });
       }
 
+      await logActivity(user?.email || "faculty", "Save Subject Config", `Saved config for ${year} Year - ${dept}`);
       alert("Saved successfully ✅");
       setIsLocked(true);
     } catch (err) {
       console.error(err);
+      await logActivity(user?.email || "faculty", "Save Subject Config Error", `Failed to save for ${year} Year: ${err.message}`);
       alert("Error saving");
     }
   };
@@ -483,7 +531,7 @@ function SubjectPage() {
       const snapshot = await getDocs(collection(db, "subjects"));
 
       const docsToDelete = snapshot.docs.filter(
-        d => d.data().dept === user?.department && d.data().year === year
+        d => d.data().dept === dept && d.data().year === year
       );
 
       // Execute Deletions
@@ -491,6 +539,7 @@ function SubjectPage() {
         await deleteDoc(doc(db, "subjects", d.id));
       }
 
+      await logActivity(user?.email || "faculty", "Delete All Subjects", `Deleted all subjects for ${year} Year - ${dept}`);
       alert("All subject data deleted successfully 🗑️");
       
       // Reset UI completely back to Step 1
@@ -510,7 +559,14 @@ function SubjectPage() {
   // ============================================================
   // 🧮 DYNAMIC CALCULATIONS
   // ============================================================
-  const totalHours = subjects.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
+  const normalSubjects = subjects.filter(sub => !(sub.type === "theory" && sub.batchRequired === "yes"));
+  const batchwiseTheory = subjects.filter(sub => sub.type === "theory" && sub.batchRequired === "yes");
+
+  const normalHours = normalSubjects.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
+  const batchwiseSum = batchwiseTheory.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
+  const batchwiseHours = batchwiseTheory.length > 0 ? (batchwiseSum / batchwiseTheory.length) : 0;
+
+  const totalHours = Number((normalHours + batchwiseHours).toFixed(1));
   const isTotalValid = totalHours === 36;
 
   // ============================================================
@@ -529,7 +585,19 @@ function SubjectPage() {
               <p className="subtitle">Data Entry & Setup for {user?.department}</p>
             </div>
             {showGrid && (
-              <div>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                {!isLocked && (
+                  <>
+                    <button className="btn btn-outline" onClick={handleAddNewRow}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      Add Row
+                    </button>
+                    <button className="btn btn-outline" onClick={handleReset}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                      Reset Changes
+                    </button>
+                  </>
+                )}
                 {isLocked ? (
                   <button className="btn btn-outline" onClick={() => setIsLocked(false)}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -555,6 +623,7 @@ function SubjectPage() {
               <li><b>Total Hours Requirement:</b> The sum of all subject hours must equal exactly <b>36</b> before generating the timetable.</li>
               <li><b>Rooms:</b> Every subject needs to be mentioned with a designated Room.</li>
               <li><b>Batch Requirement:</b> Select <i>'Yes'</i> if the lab/practical is conducted batch-wise. Select <i>'No'</i> for full-class lectures.</li>
+              <li><b>Open Electives & Professional Electives:</b> Select <i>'Yes'</i> for Batch Requirement even for theory electives (like OE3 or PE3) if the class is divided into parallel choices/parts, ensuring slots do not overlap.</li>
               <li><b>Other Departments:</b> First select the 'Other Dept', then select the specific faculty from that department.</li>
             </ul>
           </div>
@@ -587,6 +656,36 @@ function SubjectPage() {
             </div>
           )}
 
+          {/* STEP 1.5: Editable Students & Batches Summary inside Grid View */}
+          {showGrid && (
+            <div className="glass-card setup-form" style={{ padding: "20px 32px" }}>
+              <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: "600", color: "#94a3b8" }}>Total Students:</span>
+                  <input
+                    type="number"
+                    className="grid-input"
+                    style={{ width: "120px", display: "inline-block" }}
+                    value={students || ""}
+                    disabled={isLocked}
+                    onChange={(e) => setStudents(e.target.value)}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: "600", color: "#94a3b8" }}>Number of Batches:</span>
+                  <input
+                    type="number"
+                    className="grid-input"
+                    style={{ width: "120px", display: "inline-block" }}
+                    value={batches || ""}
+                    disabled={isLocked}
+                    onChange={(e) => setBatches(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* STEP 2: Main Grid */}
           {showGrid && (
             <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -603,6 +702,7 @@ function SubjectPage() {
                       <th style={{width: "140px"}}>Room</th>
                       <th style={{width: "120px"}}>Batch?</th>
                       <th style={{width: "100px"}}>Hours</th>
+                      {!isLocked && <th style={{width: "80px"}}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -720,6 +820,17 @@ function SubjectPage() {
                               onChange={(e) => handleChange(index, "hours", e.target.value)}
                             />
                           </td>
+                          {!isLocked && (
+                            <td style={{ textAlign: "center" }}>
+                              <button 
+                                className="btn btn-danger" 
+                                style={{ padding: "8px 12px", borderRadius: "8px" }} 
+                                onClick={() => handleRemoveRow(index)}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -751,7 +862,7 @@ function SubjectPage() {
 
               <div style={{ display: 'flex', gap: '16px' }}>
                 <button className="btn btn-danger" onClick={handleDeleteAll}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                   Delete All Data
                 </button>
 

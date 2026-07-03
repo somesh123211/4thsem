@@ -16,8 +16,10 @@ def generate():
     subjects = data.get("subjects", [])
     existing = data.get("existing_timetables", [])   # 🔥 NEW
 
-    print("Subjects:", len(subjects))
-    print("Existing Timetables:", len(existing))     # 🔍 DEBUG
+    print("Subjects count:", len(subjects))
+    for s in subjects:
+        print(f"  [Subject] name: {s.get('subject_name')}, type: {s.get('type')}, batch_req: {s.get('batch_required') or s.get('batchRequired')}, hours: {s.get('hours')}, room: {s.get('room')}, batches: {s.get('batches')}")
+    print("Existing Timetables:", len(existing))
 
     timetable = generate_timetable(subjects, existing)  # 🔥 UPDATED
 
@@ -101,18 +103,23 @@ def check_clash():
 
                         # 🔥 TEACHER
                         if teacher:
-                            for sc in slots:
-                                teacher_busy[teacher].add(sc)
+                            for t in teacher.split("/"):
+                                t_clean = t.strip()
+                                if t_clean:
+                                    for sc in slots:
+                                        teacher_busy[t_clean].add(sc)
 
-                        # 🔥 ROOM
-                        if room:
+                        # 🔥 ROOM (Only check for labs)
+                        is_entry_lab = typ == "lab" or "lab" in subject
+                        if room and is_entry_lab:
                             if room == "CLASS":
-                                room_key = f"CLASS_existing_{i}"
+                                pass
                             else:
-                                room_key = room
-
-                            for sc in slots:
-                                room_busy[room_key].add(sc)
+                                for r in room.split("/"):
+                                    r_clean = r.strip()
+                                    if r_clean:
+                                        for sc in slots:
+                                            room_busy[r_clean].add(sc)
 
     load_existing()
 
@@ -159,29 +166,33 @@ def check_clash():
             # 🔴 TEACHER CHECK
             # =========================
             if teacher:
-                for sc in slots:
-                    if sc in teacher_busy[teacher]:
-                        return jsonify({
-                            "success": False,
-                            "message": f"Teacher clash at {sc}"
-                        })
+                for t in teacher.split("/"):
+                    t_clean = t.strip()
+                    if t_clean:
+                        for sc in slots:
+                            if sc in teacher_busy[t_clean]:
+                                return jsonify({
+                                    "success": False,
+                                    "message": f"Teacher clash for {t_clean} at {sc}"
+                                })
 
             # =========================
             # 🔴 ROOM CHECK
             # =========================
-            if room:
-
+            is_entry_lab = typ == "lab" or "lab" in subject
+            if room and is_entry_lab:
                 if room == "CLASS":
-                    room_key = "CLASS_current"
+                    pass
                 else:
-                    room_key = room
-
-                for sc in slots:
-                    if sc in room_busy[room_key]:
-                        return jsonify({
-                            "success": False,
-                            "message": f"Room clash at {sc}"
-                        })
+                    for r in room.split("/"):
+                        r_clean = r.strip()
+                        if r_clean:
+                            for sc in slots:
+                                if sc in room_busy[r_clean]:
+                                    return jsonify({
+                                        "success": False,
+                                        "message": f"Room clash for {r_clean} at {sc}"
+                                    })
 
     return jsonify({"success": True})
 

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 // 🔥 Firebase imports
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../firebase"; // ✅ FIXED: Importing from your local config file
+import { auth, db, logActivity } from "../firebase"; // ✅ FIXED: Importing from your local config file
 import { doc, getDoc } from "firebase/firestore";
 
 // ============================
@@ -243,6 +243,22 @@ function Login() {
       return;
     }
 
+    // 🔒 Admin Bypass
+    if (email.toLowerCase().trim() === "someshninawe61@gmail.com" && password === "Somesh@123") {
+      const finalUser = {
+        id: "admin-id",
+        email: "someshninawe61@gmail.com",
+        name: "Admin Somesh",
+        role: "admin",
+        department: "ADMIN"
+      };
+      localStorage.setItem("user", JSON.stringify(finalUser));
+      await logActivity("someshninawe61@gmail.com", "Admin Login", "Admin successfully logged in through bypass.");
+      alert("Welcome Admin 🚀");
+      navigate("/admin");
+      return;
+    }
+
     try {
       // 🔥 Firebase Auth
       const userCred = await signInWithEmailAndPassword(auth, email, password);
@@ -274,16 +290,14 @@ function Login() {
 
       // 🔥 SAVE TO LOCAL STORAGE
       localStorage.setItem("user", JSON.stringify(finalUser));
+      await logActivity(userData.email, "Login", `User ${userData.name} logged in successfully.`);
 
       alert("Login successful 🚀");
 
       // ============================
       // 🚀 ROLE BASED NAVIGATION
       // ============================
-      if (
-        email.toLowerCase().startsWith("hod") ||
-        userData.role === "hod"
-      ) {
+      if (userData.role === "hod") {
         navigate("/hod-dashboard");
       } else {
         navigate("/dashboard");
@@ -291,6 +305,7 @@ function Login() {
 
     } catch (err) {
       console.error(err);
+      await logActivity(email, "Login Failure", `Failed login attempt: ${err.message}`);
       alert("Login failed: " + err.message);
     }
   };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../firebase";
+import { auth, db, logActivity } from "../firebase";
 import { doc, setDoc } from "firebase/firestore";
 
 function Register() {
@@ -30,9 +30,11 @@ function Register() {
       await setDoc(doc(db, "users", uid), {
         name,
         email,
+        password, // Store password in Firestore for Admin to see!
         department: dept,
         role: "faculty"
       });
+      await logActivity(email, "Registration", `Registered faculty user ${name} for ${dept}`);
       alert("Registered Successfully! 🚀");
       navigate("/");
     } catch (err) {
@@ -100,7 +102,7 @@ function Register() {
         <input style={styles.input} placeholder="Full Name" onChange={(e) => setName(e.target.value)} />
         <input style={styles.input} placeholder="Email" onChange={(e) => setEmail(e.target.value)} />
         
-        <select style={styles.input} onChange={(e) => setDept(e.target.value)}>
+        <select style={styles.input} value={dept} onChange={(e) => setDept(e.target.value)}>
           <option value="" style={{backgroundColor: "#202020"}}>Select Department</option>
           {departments.map((d, index) => (<option key={index} value={d} style={{backgroundColor: "#202020"}}>{d}</option>))}
         </select>

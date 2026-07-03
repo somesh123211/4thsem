@@ -345,7 +345,10 @@ function Dashboard() {
               });
 
               entries.forEach((entry) => {
-                if (!entry || entry.teacherId !== teacherId) return;
+                if (!entry) return;
+                const isAssigned = entry.teacherId === teacherId ||
+                  (typeof entry.teacherId === "string" && entry.teacherId.split("/").map(x => x.trim()).includes(teacherId));
+                if (!isAssigned) return;
 
                 let slotCodes = entry.slot;
                 if (!Array.isArray(slotCodes)) {

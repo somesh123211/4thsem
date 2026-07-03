@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebase";
@@ -274,6 +275,13 @@ function HODDashboard() {
 
   // Safely parse user from local storage
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  useEffect(() => {
+    if (!user || user.role !== "hod") {
+      alert("Access Denied: HODs Only");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   // ============================
   // SUBJECT SETUP

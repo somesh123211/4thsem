@@ -241,7 +241,7 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
                    break
 
         if not placed:
-            print(f"⚠️ Batch lab NOT placed round {round_index}")
+            print(f"WARNING: Batch lab NOT placed round {round_index}")
 
 
 def shuffle_timetable(tt, existing_timetables):
@@ -461,7 +461,7 @@ def place_common_labs(tt, common_labs, subjects, teacher_busy=None, room_busy=No
                     break
 
             if not placed:
-                print(f"⚠️ Common lab NOT placed: {sub['subject_name']}")
+                print(f"WARNING: Common lab NOT placed: {sub['subject_name']}")
 # =========================
 # THEORY (UNCHANGED)
 # =========================
@@ -492,6 +492,19 @@ def place_theory(tt, theory, subjects, teacher_busy=None, room_busy=None, mdm_sl
     for d in range(DAYS):
 
         last_subject = None
+        day_subjects = set()
+
+        # populate day_subjects with already filled slots on day d
+        for s_idx in range(SLOTS):
+            if isinstance(tt[d][s_idx].get("COMMON"), dict):
+                sub_name = tt[d][s_idx]["COMMON"].get("subject")
+                if sub_name:
+                    day_subjects.add(sub_name.strip().upper())
+            for k in tt[d][s_idx]:
+                if k != "COMMON" and isinstance(tt[d][s_idx][k], dict):
+                    sub_name = tt[d][s_idx][k].get("subject")
+                    if sub_name:
+                        day_subjects.add(sub_name.strip().upper())
 
         for s in range(SLOTS):
 
@@ -505,13 +518,20 @@ def place_theory(tt, theory, subjects, teacher_busy=None, room_busy=None, mdm_sl
                     continue
 
             # 🚫 already filled
-            if tt[d][s]["COMMON"] is not None:
-                last_subject = tt[d][s]["COMMON"]["subject"]
+            if not is_full_slot_empty(tt, d, s):
+                if isinstance(tt[d][s].get("COMMON"), dict):
+                    last_subject = tt[d][s]["COMMON"]["subject"]
+                else:
+                    last_subject = None
                 continue
 
             placed = False
 
             for sub in list(pool):
+
+                # 🚫 PREVENT SAME SUBJECT ON THE SAME DAY
+                if sub.strip().upper() in day_subjects:
+                    continue
 
                 # 🚫 PREVENT SAME SUBJECT BACK-TO-BACK
                 if sub == last_subject:
@@ -542,6 +562,7 @@ def place_theory(tt, theory, subjects, teacher_busy=None, room_busy=None, mdm_sl
                 pool.remove(sub)
 
                 last_subject = sub
+                day_subjects.add(sub.strip().upper())
                 placed = True
                 break
 
@@ -555,11 +576,11 @@ def fill_empty_slots(tt, subjects, teacher_busy=None, room_busy=None):
 
     theory_subjects = [
         s for s in subjects 
-        if s["type"] == "theory" and s["subject_name"].strip().lower() != "mdm"
-]
+        if s["type"] == "theory" and s["subject_name"].strip().lower() != "mdm" and not is_batch_theory(s)
+    ]
     for d in range(DAYS):
 
-        last_subject = None  # 🔥 track previous subject
+        last_subject = None  # track previous subject
 
         for s in range(SLOTS):
 
@@ -621,6 +642,95 @@ def fill_empty_slots(tt, subjects, teacher_busy=None, room_busy=None):
             if not placed:
                 last_subject = None
 
+
+def place_batch_theory(tt, batch_theory, subjects, teacher_busy=None, room_busy=None):
+    teacher_busy = teacher_busy or {}
+    room_busy = room_busy or {}
+
+    if not batch_theory:
+        return
+
+    subjects_to_place = []
+    for s in batch_theory:
+        subjects_to_place.append({
+            "subject_name": s["subject_name"],
+            "hours": s["hours"]
+        })
+
+    all_slots = []
+    for d in range(DAYS):
+        for s in range(SLOTS):
+            all_slots.append((d, s))
+    
+    random.shuffle(all_slots)
+
+    slot_idx = 0
+    while any(s["hours"] > 0 for s in subjects_to_place) and slot_idx < len(all_slots):
+        d, s = all_slots[slot_idx]
+        slot_idx += 1
+
+        if not is_full_slot_empty(tt, d, s):
+            continue
+
+        active_subjects = [sub for sub in subjects_to_place if sub["hours"] > 0]
+        if not active_subjects:
+            break
+
+        slot_code = get_slot_code(d, s)
+        batch_assignments = []
+        possible = True
+
+        for b_idx, s_obj in enumerate(active_subjects):
+            sub_name = s_obj["subject_name"]
+            teacher, teacherId = get_teacher(sub_name, subjects)
+            room = get_room(sub_name, subjects)
+
+            if not is_valid_global(teacherId, room, d, s, teacher_busy, room_busy):
+                possible = False
+                break
+
+            batch_assignments.append((b_idx, s_obj, sub_name, teacher, teacherId, room))
+
+        if possible:
+            # Merge into a single entry under COMMON
+            merged_subject_names = []
+            merged_teachers = []
+            merged_teacher_ids = []
+            merged_rooms = []
+
+            for b_idx, s_obj, sub_name, teacher, teacherId, room in batch_assignments:
+                merged_subject_names.append(sub_name)
+                merged_teachers.append(teacher)
+                merged_teacher_ids.append(teacherId)
+                merged_rooms.append(room)
+
+            # Deduplicate names and rooms
+            unique_subject_names = []
+            for name in merged_subject_names:
+                if name not in unique_subject_names:
+                    unique_subject_names.append(name)
+
+            unique_rooms = []
+            for rm in merged_rooms:
+                if rm not in unique_rooms:
+                    unique_rooms.append(rm)
+
+            entry = {
+                "subject": " / ".join(unique_subject_names),
+                "teacher": " / ".join(merged_teachers),
+                "teacherId": "/".join(merged_teacher_ids),
+                "type": "theory",
+                "room": " / ".join(unique_rooms),
+                "slot": slot_code
+            }
+            tt[d][s]["COMMON"] = entry
+
+            # Register constraint markers & decrement hours
+            for b_idx, s_obj, sub_name, teacher, teacherId, room in batch_assignments:
+                teacher_busy.setdefault(teacherId, set()).add(slot_code)
+                room_busy.setdefault(room, set()).add(slot_code)
+                s_obj["hours"] -= 1
+
 # MAIN
 # =========================
 import time
@@ -635,8 +745,13 @@ def generate_timetable(subjects, existing_timetables=None):
     subjects = normalize(subjects)
     random.shuffle(subjects)
 
-    # constraints
     teacher_busy, room_busy = build_constraints(existing_timetables or [])
+    print("DEBUG constraints - teacher_busy:")
+    for t_id, slots in sorted(teacher_busy.items()):
+        print(f"  {t_id}: {sorted(list(slots))}")
+    print("DEBUG constraints - room_busy:")
+    for r_id, slots in sorted(room_busy.items()):
+        print(f"  {r_id}: {sorted(list(slots))}")
 
     # =========================
     # 🔥 FINAL MDM LOGIC
@@ -690,6 +805,7 @@ def generate_timetable(subjects, existing_timetables=None):
     # =========================
     batch_labs = []
     common_labs = []
+    batch_theory = []
     theory = []
 
     for s in subjects:
@@ -697,6 +813,8 @@ def generate_timetable(subjects, existing_timetables=None):
             batch_labs.append(s)
         elif is_common_lab(s):
             common_labs.append(s)
+        elif is_batch_theory(s):
+            batch_theory.append(s)
         elif is_theory(s):
             theory.append(s)
 
@@ -718,6 +836,14 @@ def generate_timetable(subjects, existing_timetables=None):
 
     place_common_labs(
         tt, common_labs, subjects,
+        teacher_busy, room_busy
+    )
+
+    # =========================
+    # STEP 1.5: PLACE BATCH THEORY
+    # =========================
+    place_batch_theory(
+        tt, batch_theory, subjects,
         teacher_busy, room_busy
     )
 

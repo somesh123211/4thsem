@@ -157,6 +157,14 @@ function ViewTimetable() {
   // =========================
   const isSameSlot = (s1, s2) => {
     if (!s1 || !s2) return false;
+    const isLabSlot = (obj) => {
+      if (obj?.COMMON && obj.COMMON.type === "lab") return true;
+      for (let k in obj) {
+        if (k !== "COMMON" && obj[k] && obj[k].type === "lab") return true;
+      }
+      return false;
+    };
+    if (!isLabSlot(s1) || !isLabSlot(s2)) return false;
     if (Object.keys(s1).length === 0 || Object.keys(s2).length === 0) return false;
     
     // Check if the underlying subject content matches exactly
@@ -360,7 +368,14 @@ function ViewTimetable() {
   // =========================
   const renderSlot = (entry) => {
     if (!entry) return null;
-    const teacher = teacherMap[entry.teacherId] || teacherMap[entry.teacher] || "NA";
+    let teacher = "NA";
+    if (entry.teacherId) {
+      const ids = entry.teacherId.split("/");
+      const names = ids.map(id => teacherMap[id.trim()] || id.trim());
+      teacher = names.join(" / ");
+    } else if (entry.teacher) {
+      teacher = entry.teacher;
+    }
 
     return (
       <div style={{ padding: "3px 0" }}>
