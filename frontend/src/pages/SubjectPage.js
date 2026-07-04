@@ -298,6 +298,8 @@ function SubjectPage() {
 
   // ================== MAIN DATA ==================
   const [subjects, setSubjects] = useState([]);
+  const [numPeGroups, setNumPeGroups] = useState("");
+  const [peGroups, setPeGroups] = useState([]);
 
   // ================== DROPDOWNS ==================
   const [facultyList, setFacultyList] = useState([]);
@@ -367,7 +369,10 @@ function SubjectPage() {
       .filter(s => s.dept === dept && s.year === year);
 
     if (data.length > 0) {
-      const formatted = data.map(d => ({
+      const normalData = data.filter(d => !d.elective_group);
+      const electiveData = data.filter(d => d.elective_group);
+
+      const formattedNormal = normalData.map(d => ({
         id: d.id,
         name: d.subject_name || "",
         code: d.subject_code || "",
@@ -380,12 +385,40 @@ function SubjectPage() {
         hours: String(d.hours || "")
       }));
 
-      setSubjects(formatted);
+      const peMap = {};
+      electiveData.forEach(d => {
+        const group = d.elective_group;
+        if (!peMap[group]) {
+          peMap[group] = {
+            id: `pe_${group}`,
+            groupName: group,
+            hours: String(d.hours || "3"),
+            subjects: []
+          };
+        }
+        peMap[group].subjects.push({
+          id: d.id,
+          name: d.subject_name || "",
+          code: d.subject_code || "",
+          faculty: d.faculty_id || "",
+          otherDept: d.other_department || "",
+          otherFaculty: d.other_faculty_id || "",
+          room: d.room || ""
+        });
+      });
+
+      const formattedPes = Object.values(peMap);
+
+      setSubjects(formattedNormal);
+      setPeGroups(formattedPes);
+      setNumPeGroups(String(formattedPes.length));
       setShowGrid(true);
       setStudents(data[0].students);
       setBatches(data[0].batches);
     } else {
       setSubjects([]);
+      setPeGroups([]);
+      setNumPeGroups("");
       setShowGrid(false);
       setStudents("");
       setBatches("");
@@ -448,6 +481,22 @@ function SubjectPage() {
       });
     }
     setSubjects(arr);
+
+    let pes = [];
+    const count = Number(numPeGroups) || 0;
+    for (let i = 0; i < count; i++) {
+      pes.push({
+        id: `pe_${Date.now()}_${i}`,
+        groupName: `PE ${i + 4}`,
+        hours: "3",
+        subjects: [
+          { name: "", code: "", faculty: "", otherDept: "", otherFaculty: "", room: "" },
+          { name: "", code: "", faculty: "", otherDept: "", otherFaculty: "", room: "" }
+        ]
+      });
+    }
+    setPeGroups(pes);
+
     setShowGrid(true);
     setIsLocked(false);
   };
@@ -468,6 +517,62 @@ function SubjectPage() {
       if (field === "otherDept") {
         updated[index].otherFaculty = "";
       }
+      return updated;
+    });
+  };
+
+  const handlePeGroupChange = (groupIndex, field, value) => {
+    if (isLocked) return;
+    setPeGroups(prev => {
+      const updated = [...prev];
+      updated[groupIndex] = {
+        ...updated[groupIndex],
+        [field]: value
+      };
+      return updated;
+    });
+  };
+
+  const handlePeSubjectChange = (groupIndex, subIndex, field, value) => {
+    if (isLocked) return;
+    setPeGroups(prev => {
+      const updated = [...prev];
+      const updatedGroup = { ...updated[groupIndex] };
+      const updatedSubs = [...updatedGroup.subjects];
+      updatedSubs[subIndex] = {
+        ...updatedSubs[subIndex],
+        [field]: value
+      };
+      if (field === "otherDept") {
+        updatedSubs[subIndex].otherFaculty = "";
+      }
+      updatedGroup.subjects = updatedSubs;
+      updated[groupIndex] = updatedGroup;
+      return updated;
+    });
+  };
+
+  const handleAddPeSubject = (groupIndex) => {
+    if (isLocked) return;
+    setPeGroups(prev => {
+      const updated = [...prev];
+      const updatedGroup = { ...updated[groupIndex] };
+      updatedGroup.subjects = [
+        ...updatedGroup.subjects,
+        { name: "", code: "", faculty: "", otherDept: "", otherFaculty: "", room: "" }
+      ];
+      updated[groupIndex] = updatedGroup;
+      return updated;
+    });
+  };
+
+  const handleRemovePeSubject = (groupIndex, subIndex) => {
+    if (isLocked) return;
+    setPeGroups(prev => {
+      const updated = [...prev];
+      const updatedGroup = { ...updated[groupIndex] };
+      updatedGroup.subjects = updatedGroup.subjects.filter((_, idx) => idx !== subIndex);
+      updated[groupIndex] = updatedGroup;
       return updated;
     });
   };
@@ -501,10 +606,33 @@ function SubjectPage() {
           other_department: sub.otherDept || null,
           other_faculty_id: sub.otherFaculty || null,
           type: sub.type,
-          room: sub.room,
+          room: sub.room || "",
           batch_required: sub.batchRequired,
-          hours: Number(sub.hours)
+          hours: Number(sub.hours),
+          elective_group: null
         });
+      }
+
+      // INSERT PE ELECTIVE SUBJECTS
+      for (let pe of peGroups) {
+        for (let sub of pe.subjects) {
+          await addDoc(collection(db, "subjects"), {
+            dept,
+            year,
+            students,
+            batches,
+            subject_name: sub.name,
+            subject_code: sub.code,
+            faculty_id: sub.faculty || null,
+            other_department: sub.otherDept || null,
+            other_faculty_id: sub.otherFaculty || null,
+            type: "theory",
+            room: sub.room || "",
+            batch_required: "no",
+            hours: Number(pe.hours),
+            elective_group: pe.groupName
+          });
+        }
       }
 
       await logActivity(user?.email || "faculty", "Save Subject Config", `Saved config for ${year} Year - ${dept}`);
@@ -559,14 +687,10 @@ function SubjectPage() {
   // ============================================================
   // 🧮 DYNAMIC CALCULATIONS
   // ============================================================
-  const normalSubjects = subjects.filter(sub => !(sub.type === "theory" && sub.batchRequired === "yes"));
-  const batchwiseTheory = subjects.filter(sub => sub.type === "theory" && sub.batchRequired === "yes");
+  const normalHours = subjects.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
+  const peHours = peGroups.reduce((sum, pe) => sum + (Number(pe.hours) || 0), 0);
 
-  const normalHours = normalSubjects.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
-  const batchwiseSum = batchwiseTheory.reduce((sum, sub) => sum + (Number(sub.hours) || 0), 0);
-  const batchwiseHours = batchwiseTheory.length > 0 ? (batchwiseSum / batchwiseTheory.length) : 0;
-
-  const totalHours = Number((normalHours + batchwiseHours).toFixed(1));
+  const totalHours = Number((normalHours + peHours).toFixed(1));
   const isTotalValid = totalHours === 36;
 
   // ============================================================
@@ -620,10 +744,10 @@ function SubjectPage() {
               Setup Guidelines
             </h3>
             <ul>
-              <li><b>Total Hours Requirement:</b> The sum of all subject hours must equal exactly <b>36</b> before generating the timetable.</li>
+              <li><b>Total Hours Requirement:</b> The sum of all subject hours (including PE groups) must equal exactly <b>36</b> before generating the timetable.</li>
               <li><b>Rooms:</b> Every subject needs to be mentioned with a designated Room.</li>
               <li><b>Batch Requirement:</b> Select <i>'Yes'</i> if the lab/practical is conducted batch-wise. Select <i>'No'</i> for full-class lectures.</li>
-              <li><b>Open Electives & Professional Electives:</b> Select <i>'Yes'</i> for Batch Requirement even for theory electives (like OE3 or PE3) if the class is divided into parallel choices/parts, ensuring slots do not overlap.</li>
+              <li><b>Professional Electives:</b> Group elective subjects (like PE4, PE5) into PE Groups. These subjects will automatically run together in parallel in the same timetable slot.</li>
               <li><b>Other Departments:</b> First select the 'Other Dept', then select the specific faculty from that department.</li>
             </ul>
           </div>
@@ -648,6 +772,12 @@ function SubjectPage() {
                 placeholder="Number of Batches"
                 type="number"
                 onChange={(e) => setBatches(e.target.value)}
+              />
+              <input
+                className="setup-input"
+                placeholder="No. of PE Groups"
+                type="number"
+                onChange={(e) => setNumPeGroups(e.target.value)}
               />
               <button className="btn btn-primary" onClick={createGrid}>
                 Initialize Grid
@@ -837,6 +967,162 @@ function SubjectPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* STEP 3: PE Groups Grid */}
+          {showGrid && peGroups.length > 0 && (
+            <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+              <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#60A5FA", margin: "0 0 8px 0" }}>
+                Professional Elective (PE) Groups Setup
+              </h3>
+              {peGroups.map((pe, gIdx) => (
+                <div key={pe.id} className="glass-card" style={{ padding: "24px" }}>
+                  <div style={{ display: "flex", gap: "20px", alignItems: "center", marginBottom: "20px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: "600", color: "#94a3b8" }}>Group Name:</span>
+                      <input
+                        className="grid-input"
+                        style={{ width: "120px" }}
+                        value={pe.groupName || ""}
+                        disabled={isLocked}
+                        onChange={(e) => handlePeGroupChange(gIdx, "groupName", e.target.value)}
+                      />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: "600", color: "#94a3b8" }}>Hours per Week:</span>
+                      <input
+                        type="number"
+                        className="grid-input"
+                        style={{ width: "80px" }}
+                        value={pe.hours || ""}
+                        disabled={isLocked}
+                        onChange={(e) => handlePeGroupChange(gIdx, "hours", e.target.value)}
+                      />
+                    </div>
+                    {!isLocked && (
+                      <button 
+                        className="btn btn-outline" 
+                        style={{ padding: "6px 12px", fontSize: "13px" }}
+                        onClick={() => handleAddPeSubject(gIdx)}
+                      >
+                        + Add Subject Option
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Subject Name</th>
+                          <th style={{ width: "120px" }}>Code</th>
+                          <th>Dept Faculty</th>
+                          <th>Other Dept</th>
+                          <th>Other Faculty</th>
+                          <th style={{ width: "140px" }}>Room</th>
+                          {!isLocked && <th style={{ width: "80px" }}>Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pe.subjects.map((sub, sIdx) => {
+                          const otherFacultyList = allUsers.filter(
+                            u => (u.role === "faculty" || u.role === "hod") && u.department === sub.otherDept
+                          );
+                          const filteredRooms = rooms.filter(r => r.type === "classroom");
+
+                          return (
+                            <tr key={sIdx}>
+                              <td>
+                                <input
+                                  className="grid-input"
+                                  placeholder="e.g. Machine Learning"
+                                  value={sub.name || ""}
+                                  disabled={isLocked}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "name", e.target.value)}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="grid-input"
+                                  placeholder="e.g. PE401"
+                                  value={sub.code || ""}
+                                  disabled={isLocked}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "code", e.target.value)}
+                                />
+                              </td>
+                              <td>
+                                <select
+                                  className="grid-select"
+                                  value={sub.faculty || ""}
+                                  disabled={isLocked}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "faculty", e.target.value)}
+                                >
+                                  <option value="">-- Select --</option>
+                                  {facultyList.map(f => (
+                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  className="grid-select"
+                                  value={sub.otherDept || ""}
+                                  disabled={isLocked}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "otherDept", e.target.value)}
+                                >
+                                  <option value="">-- Select --</option>
+                                  {[...new Set(allUsers.map(u => u.department).filter(Boolean))].map(d => (
+                                    <option key={d}>{d}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  className="grid-select"
+                                  value={sub.otherFaculty || ""}
+                                  disabled={isLocked || !sub.otherDept}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "otherFaculty", e.target.value)}
+                                >
+                                  <option value="">-- Select --</option>
+                                  {otherFacultyList.map(f => (
+                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  className="grid-select"
+                                  value={sub.room || ""}
+                                  disabled={isLocked}
+                                  onChange={(e) => handlePeSubjectChange(gIdx, sIdx, "room", e.target.value)}
+                                >
+                                  <option value="">-- Select --</option>
+                                  {filteredRooms.map(r => (
+                                    <option key={r.id}>{r.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              {!isLocked && (
+                                <td style={{ textAlign: "center" }}>
+                                  <button 
+                                    className="btn btn-danger" 
+                                    style={{ padding: "8px 12px", borderRadius: "8px" }} 
+                                    disabled={pe.subjects.length <= 2}
+                                    onClick={() => handleRemovePeSubject(gIdx, sIdx)}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

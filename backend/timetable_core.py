@@ -743,6 +743,81 @@ def place_batch_theory(tt, batch_theory, subjects, teacher_busy=None, room_busy=
                 room_busy.setdefault(room, set()).add(slot_code)
                 s_obj["hours"] -= 1
 
+def place_elective_groups(tt, elective_groups, subjects, teacher_busy=None, room_busy=None):
+    teacher_busy = teacher_busy or {}
+    room_busy = room_busy or {}
+
+    for group_name, group_subs in elective_groups.items():
+        if not group_subs:
+            continue
+
+        # Get hours from the group subjects
+        hours = group_subs[0].get("hours", 3)
+
+        for _ in range(hours):
+            placed = False
+
+            all_slots = []
+            for d in range(DAYS):
+                for s in range(SLOTS):
+                    all_slots.append((d, s))
+            random.shuffle(all_slots)
+
+            for d, s in all_slots:
+                # 🚫 DO NOT TOUCH LAB SLOT
+                if is_lab_slot(tt, d, s):
+                    continue
+
+                # 🚫 must be empty
+                if not is_full_slot_empty(tt, d, s):
+                    continue
+
+                slot_code = get_slot_code(d, s)
+
+                # Check teacher and room clash constraints for all option subjects in this PE group
+                possible = True
+                batch_assignments = []
+                for sub_obj in group_subs:
+                    sub_name = sub_obj["subject_name"]
+                    teacher, teacherId = get_teacher(sub_name, subjects)
+                    room = sub_obj.get("room", "CLASS")
+
+                    if not is_valid_global(teacherId, room, d, s, teacher_busy, room_busy):
+                        possible = False
+                        break
+
+                    batch_assignments.append((sub_name, teacher, teacherId, room))
+
+                if possible:
+                    # Place all elective choices parallelly under COMMON
+                    merged_names = [item[0] for item in batch_assignments]
+                    merged_teachers = [item[1] for item in batch_assignments]
+                    merged_teacher_ids = [item[2] for item in batch_assignments]
+                    merged_rooms = [item[3] for item in batch_assignments]
+
+                    entry = {
+                        "subject": " / ".join(merged_names),
+                        "teacher": " / ".join(merged_teachers),
+                        "teacherId": "/".join(merged_teacher_ids),
+                        "type": "theory",
+                        "room": " / ".join(merged_rooms),
+                        "slot": slot_code
+                    }
+
+                    tt[d][s]["COMMON"] = entry
+
+                    # Apply busy tags
+                    for sub_name, teacher, teacherId, room in batch_assignments:
+                        teacher_busy.setdefault(teacherId, set()).add(slot_code)
+                        room_busy.setdefault(room, set()).add(slot_code)
+
+                    placed = True
+                    break
+
+            if not placed:
+                print(f"WARNING: PE Elective group {group_name} slot NOT placed")
+
+
 # MAIN
 # =========================
 import time
@@ -819,9 +894,13 @@ def generate_timetable(subjects, existing_timetables=None):
     common_labs = []
     batch_theory = []
     theory = []
+    elective_groups = {}
 
     for s in subjects:
-        if is_batch_lab(s):
+        group_name = s.get("elective_group")
+        if group_name:
+            elective_groups.setdefault(group_name, []).append(s)
+        elif is_batch_lab(s):
             batch_labs.append(s)
         elif is_common_lab(s):
             common_labs.append(s)
@@ -848,6 +927,14 @@ def generate_timetable(subjects, existing_timetables=None):
 
     place_common_labs(
         tt, common_labs, subjects,
+        teacher_busy, room_busy
+    )
+
+    # =========================
+    # STEP 1.4: PLACE ELECTIVE GROUPS
+    # =========================
+    place_elective_groups(
+        tt, elective_groups, subjects,
         teacher_busy, room_busy
     )
 
