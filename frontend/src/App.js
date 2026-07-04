@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -7,6 +7,15 @@ import SubjectPage from "./pages/SubjectPage";
 import GenerateTimetable from "./pages/GenerateTimetable";
 import ViewTimetable from "./pages/ViewTimetable";
 import AdminPage from "./pages/AdminPage";
+
+// ✅ Route guard — only allows admin role through
+function ProtectedAdminRoute() {
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  if (!user || user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+  return <AdminPage />;
+}
 
 function App() {
   return (
@@ -19,7 +28,7 @@ function App() {
         <Route path="/subjects/:year" element={<SubjectPage />} />
         <Route path="/generate" element={<GenerateTimetable />} />
         <Route path="/view/:id" element={<ViewTimetable />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin" element={<ProtectedAdminRoute />} />
       </Routes>
     </Router>
   );

@@ -212,7 +212,7 @@ def check_clash():
 otp_store = {}  # In-memory store: { email: { "otp": "123456", "name": "Prof" } }
 
 def send_brevo_otp(email, name, otp):
-    api_key = os.environ.get("BREVO_API_KEY")
+    api_key = os.environ.get("BREVO_API_KEY", "").strip()
     if not api_key:
         print("BREVO_API_KEY not found in environment!")
         return False
@@ -310,7 +310,7 @@ def send_brevo_otp(email, name, otp):
     """
 
     payload = {
-        "sender": { "name": "Smart Timetable Generator", "email": "no-reply@timetable-generator.com" },
+        "sender": { "name": "Smart Timetable Generator", "email": "someshninawe61@gmail.com" },
         "to": [ { "email": email } ],
         "subject": f"{otp} is your email verification code",
         "htmlContent": html_content

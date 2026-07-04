@@ -166,11 +166,11 @@ function GenerateTimetable() {
 
       setTotalTimetables(snapshotTT.size);
 
-       const res = await fetch(`${API}/generate`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ subjects, existing_timetables: existing })
-});
+      const res = await fetch(`${API}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjects, existing_timetables: existing })
+      });
 
       const data = await res.json();
       setTimetable(data.timetable);
@@ -191,7 +191,7 @@ function GenerateTimetable() {
   const getChangedSlots = () => {
     const changes = [];
     if (!originalTT || !timetable) return changes;
-    
+
     for (let d = 0; d < 6; d++) {
       for (let s = 0; s < 6; s++) {
         const oldSlot = originalTT[d]?.[s];
@@ -219,8 +219,8 @@ function GenerateTimetable() {
         }
       });
 
-      
-      
+
+
 
       const changed = getChangedSlots();
       if (changed.length === 0) {
@@ -364,15 +364,15 @@ function GenerateTimetable() {
       if (totalTimetables > 0) {
         let movingMDM = false;
         if (srcIs2Hour || destIs2Hour) {
-          if (isMDM(newTT[sd][srcStart]) || isMDM(newTT[sd][srcStart + 1]) || 
-              isMDM(newTT[dd][destStart]) || isMDM(newTT[dd][destStart + 1])) movingMDM = true;
+          if (isMDM(newTT[sd][srcStart]) || isMDM(newTT[sd][srcStart + 1]) ||
+            isMDM(newTT[dd][destStart]) || isMDM(newTT[dd][destStart + 1])) movingMDM = true;
         } else {
           if (isMDM(newTT[sd][ss]) || isMDM(newTT[dd][ds])) movingMDM = true;
         }
-        
+
         if (movingMDM) {
           alert("MDM cannot be moved");
-          return prevTT; 
+          return prevTT;
         }
       }
 
@@ -447,7 +447,7 @@ function GenerateTimetable() {
     await setDoc(docRef, {
       className,
       department,
-      timetable: convertTimetable(JSON.parse(JSON.stringify(timetable))), 
+      timetable: convertTimetable(JSON.parse(JSON.stringify(timetable))),
       createdAt: serverTimestamp()
     });
 
@@ -486,9 +486,9 @@ function GenerateTimetable() {
               <tr>
                 <th style={styles.th}>Day</th>
                 {timeSlots.map((t, i) => (
-                  <th key={i} style={{ 
-                    ...styles.th, 
-                    borderRight: (i === 1 || i === 3) ? styles.breakDivider : styles.th.borderRight 
+                  <th key={i} style={{
+                    ...styles.th,
+                    borderRight: (i === 1 || i === 3) ? styles.breakDivider : styles.th.borderRight
                   }}>
                     {t}
                   </th>
@@ -505,7 +505,7 @@ function GenerateTimetable() {
                     </td>
 
                     {dayData.map((slot, s) => {
-                      
+
                       const isSameLab = (s1, s2) => {
                         if (!s1 || !s2) return false;
                         const isLabSlot = (obj) => {
@@ -548,7 +548,7 @@ function GenerateTimetable() {
                               colSpan={isDoubleLab ? 2 : 1}
                               style={{
                                 ...styles.tdBase,
-                                backgroundColor: isDoubleLab ? "#374151" : "#1F2937", 
+                                backgroundColor: isDoubleLab ? "#374151" : "#1F2937",
                                 border: isDoubleLab ? "2px solid #6B7280" : "1px solid #374151",
                                 borderRight: thickBorder ? styles.breakDivider : "1px solid #374151"
                               }}
@@ -602,20 +602,20 @@ function GenerateTimetable() {
       {/* Buttons Container */}
       {timetable && (
         <div style={{ display: "flex", justifyContent: "center", gap: "20px", marginTop: "30px" }}>
-          <button 
-            style={{ ...styles.finalizeBtn, marginTop: 0, backgroundColor: "#6366F1" }} 
+          <button
+            style={{ ...styles.finalizeBtn, marginTop: 0, backgroundColor: "#6366F1" }}
             onClick={handleCheckClash}
           >
             ⚡ Check Clash
           </button>
-          
-          <button 
-            style={{ 
-              ...styles.finalizeBtn, 
-              marginTop: 0, 
+
+          <button
+            style={{
+              ...styles.finalizeBtn,
+              marginTop: 0,
               opacity: canFinalize ? 1 : 0.5,
               cursor: canFinalize ? "pointer" : "not-allowed"
-            }} 
+            }}
             onClick={handleFinalize}
             disabled={!canFinalize}
           >

@@ -232,7 +232,16 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Admin OTP states
+  const [showAdminOtpModal, setShowAdminOtpModal] = useState(false);
+  const [adminOtp, setAdminOtp] = useState("");
+  const [sendingAdminOtp, setSendingAdminOtp] = useState(false);
+  const [verifyingAdminOtp, setVerifyingAdminOtp] = useState(false);
+
   const navigate = useNavigate();
+
+  const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+  const ADMIN_EMAIL = "someshninawe61@gmail.com";
 
   // ============================
   // 🔐 HANDLE LOGIN
@@ -243,19 +252,27 @@ function Login() {
       return;
     }
 
-    // 🔒 Admin Bypass
-    if (email.toLowerCase().trim() === "someshninawe61@gmail.com" && password === "Somesh@123") {
-      const finalUser = {
-        id: "admin-id",
-        email: "someshninawe61@gmail.com",
-        name: "Admin Somesh",
-        role: "admin",
-        department: "ADMIN"
-      };
-      localStorage.setItem("user", JSON.stringify(finalUser));
-      await logActivity("someshninawe61@gmail.com", "Admin Login", "Admin successfully logged in through bypass.");
-      alert("Welcome Admin 🚀");
-      navigate("/admin");
+    // 🔒 Admin Bypass — first verify credentials, THEN send OTP
+    if (email.toLowerCase().trim() === ADMIN_EMAIL && password === "Somesh@123") {
+      setSendingAdminOtp(true);
+      try {
+        const res = await fetch(`${API}/send-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: ADMIN_EMAIL, name: "Admin Somesh" })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSendingAdminOtp(false);
+          setShowAdminOtpModal(true);
+        } else {
+          setSendingAdminOtp(false);
+          alert("Failed to send verification code: " + (data.message || "Unknown error"));
+        }
+      } catch (err) {
+        setSendingAdminOtp(false);
+        alert("Error connecting to backend. Please ensure the server is running.");
+      }
       return;
     }
 
@@ -308,6 +325,66 @@ function Login() {
       await logActivity(email, "Login Failure", `Failed login attempt: ${err.message}`);
       alert("Login failed: " + err.message);
     }
+  };
+
+  // ============================
+  // 🔐 VERIFY ADMIN OTP
+  // ============================
+  const handleVerifyAdminOtp = async () => {
+    if (!adminOtp) {
+      alert("Please enter the verification code.");
+      return;
+    }
+    setVerifyingAdminOtp(true);
+    try {
+      const res = await fetch(`${API}/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: ADMIN_EMAIL, otp: adminOtp })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowAdminOtpModal(false);
+        const finalUser = {
+          id: "admin-id",
+          email: ADMIN_EMAIL,
+          name: "Admin Somesh",
+          role: "admin",
+          department: "ADMIN"
+        };
+        localStorage.setItem("user", JSON.stringify(finalUser));
+        await logActivity(ADMIN_EMAIL, "Admin Login", "Admin verified with OTP and logged in successfully.");
+        alert("Welcome Admin 🚀");
+        navigate("/admin");
+      } else {
+        alert(data.message || "Invalid verification code. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Verification error. Please try again.");
+    }
+    setVerifyingAdminOtp(false);
+  };
+
+  // Resend OTP for admin
+  const handleResendAdminOtp = async () => {
+    setSendingAdminOtp(true);
+    try {
+      const res = await fetch(`${API}/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: ADMIN_EMAIL, name: "Admin Somesh" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Verification code resent to " + ADMIN_EMAIL);
+      } else {
+        alert("Failed to resend: " + (data.message || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error connecting to backend.");
+    }
+    setSendingAdminOtp(false);
   };
 
   // ============================
@@ -382,8 +459,8 @@ function Login() {
           </div>
 
           {/* LOGIN BUTTON */}
-          <button className="btn-primary" onClick={handleLogin}>
-            Sign In Securely
+          <button className="btn-primary" onClick={handleLogin} disabled={sendingAdminOtp}>
+            {sendingAdminOtp ? "Sending Verification Code..." : "Sign In Securely"}
           </button>
 
           {/* DIVIDER */}
@@ -398,8 +475,101 @@ function Login() {
 
         </div>
       </div>
+
+      {/* ============================= */}
+      {/* 🔐 ADMIN OTP VERIFICATION MODAL */}
+      {/* ============================= */}
+      {showAdminOtpModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.88)",
+          backdropFilter: "blur(14px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 2000, padding: "20px"
+        }}>
+          <div style={{
+            width: "100%", maxWidth: "420px",
+            backgroundColor: "#0d1117",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            borderRadius: "24px",
+            padding: "40px 36px",
+            textAlign: "center",
+            boxShadow: "0 0 60px rgba(99, 102, 241, 0.2), 0 20px 40px rgba(0,0,0,0.6)",
+            fontFamily: "'Plus Jakarta Sans', sans-serif"
+          }}>
+            {/* Shield Icon */}
+            <div style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: "64px", height: "64px", borderRadius: "16px",
+              background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))",
+              border: "1px solid rgba(99,102,241,0.4)", marginBottom: "20px"
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+
+            <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#f1f5f9", margin: "0 0 10px 0" }}>
+              Admin Verification
+            </h3>
+            <p style={{ color: "#94a3b8", fontSize: "14px", lineHeight: "22px", margin: "0 0 28px 0" }}>
+              A 6-digit security code has been sent to<br/>
+              <span style={{ color: "#818cf8", fontWeight: "700" }}>{ADMIN_EMAIL}</span>
+            </p>
+
+            <input
+              type="text"
+              maxLength="6"
+              placeholder="000000"
+              value={adminOtp}
+              onChange={(e) => setAdminOtp(e.target.value.replace(/\D/g, ""))}
+              onKeyDown={(e) => e.key === "Enter" && handleVerifyAdminOtp()}
+              style={{
+                width: "100%", padding: "16px",
+                letterSpacing: "10px", textAlign: "center",
+                fontSize: "28px", fontWeight: "800",
+                backgroundColor: "rgba(99,102,241,0.07)",
+                border: "1px solid rgba(99,102,241,0.3)",
+                borderRadius: "14px", color: "#f1f5f9",
+                marginBottom: "20px", boxSizing: "border-box",
+                fontFamily: "monospace", outline: "none"
+              }}
+            />
+
+            <button
+              onClick={handleVerifyAdminOtp}
+              disabled={verifyingAdminOtp}
+              style={{
+                width: "100%", padding: "16px",
+                background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                color: "#fff", border: "none", borderRadius: "14px",
+                fontSize: "16px", fontWeight: "700", cursor: "pointer",
+                boxShadow: "0 10px 25px -5px rgba(99,102,241,0.4)",
+                marginBottom: "20px", fontFamily: "inherit"
+              }}
+            >
+              {verifyingAdminOtp ? "Verifying..." : "Verify & Access Admin Panel"}
+            </button>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+              <span
+                style={{ color: "#64748b", cursor: "pointer" }}
+                onClick={() => { setShowAdminOtpModal(false); setAdminOtp(""); }}
+              >
+                Cancel
+              </span>
+              <span
+                style={{ color: "#818cf8", cursor: "pointer", fontWeight: "600" }}
+                onClick={handleResendAdminOtp}
+              >
+                {sendingAdminOtp ? "Sending..." : "Resend Code"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-export default Login;
+export default Login;

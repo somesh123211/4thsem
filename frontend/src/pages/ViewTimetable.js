@@ -166,7 +166,7 @@ function ViewTimetable() {
     };
     if (!isLabSlot(s1) || !isLabSlot(s2)) return false;
     if (Object.keys(s1).length === 0 || Object.keys(s2).length === 0) return false;
-    
+
     // Check if the underlying subject content matches exactly
     const getSubs = (obj) => {
       const subs = [];
@@ -176,7 +176,7 @@ function ViewTimetable() {
       });
       return subs.sort().join("|");
     };
-    
+
     const str1 = getSubs(s1);
     const str2 = getSubs(s2);
     return str1 === str2 && str1 !== "";
@@ -232,7 +232,7 @@ function ViewTimetable() {
         let movingMDM = false;
         if (srcIsDouble || destIsDouble) {
           if (isMDM(getSlot(sd, b_start_src)) || isMDM(getSlot(sd, b_start_src + 1)) ||
-              isMDM(getSlot(dd, b_start_dest)) || isMDM(getSlot(dd, b_start_dest + 1))) movingMDM = true;
+            isMDM(getSlot(dd, b_start_dest)) || isMDM(getSlot(dd, b_start_dest + 1))) movingMDM = true;
         } else {
           if (isMDM(getSlot(sd, ss)) || isMDM(getSlot(dd, ds))) movingMDM = true;
         }
@@ -307,15 +307,15 @@ function ViewTimetable() {
       }
 
       const res = await fetch(`${process.env.REACT_APP_API_URL}/check-clash`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    timetable: editedTT,
-    existing_timetables: existing,
-    changed_slots: changed,
-    current_id: decodedId
-  })
-});
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timetable: editedTT,
+          existing_timetables: existing,
+          changed_slots: changed,
+          current_id: decodedId
+        })
+      });
 
       const data = await res.json();
 
@@ -393,14 +393,14 @@ function ViewTimetable() {
 
   return (
     <div style={styles.page}>
-      
+
       {/* Top Header Card */}
       <div style={styles.headerCard}>
         <div>
           <h2 style={styles.title}>Timetable Viewer</h2>
           <p style={styles.subtitle}>{meta.department} • {meta.year}</p>
         </div>
-        
+
         <div style={styles.buttonRow}>
           <button style={styles.btn("#6366F1")} onClick={handleCheckClash}>⚡ Check Clash</button>
           <button style={styles.btn("#10B981")} onClick={handleFinalize}>✔ Finalize</button>
@@ -448,7 +448,7 @@ function ViewTimetable() {
                             colSpan={isDoubleSlot ? 2 : 1}
                             style={{
                               ...styles.tdBase,
-                              backgroundColor: isDoubleSlot ? "#374151" : "#1F2937", 
+                              backgroundColor: isDoubleSlot ? "#374151" : "#1F2937",
                               border: isDoubleSlot ? "2px solid #4B5563" : "1px solid #374151",
                               textAlign: "center"
                             }}

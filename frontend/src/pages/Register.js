@@ -98,17 +98,18 @@ function Register() {
 
   // Final Registration helper
   const handleCompleteRegistration = async () => {
+    const cleanEmail = email.trim();
     try {
-      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const uid = userCred.user.uid;
       await setDoc(doc(db, "users", uid), {
         name,
-        email,
+        email: cleanEmail,
         password, // Store password in Firestore for Admin to see!
         department: dept,
         role: "faculty"
       });
-      await logActivity(email, "Registration", `Registered faculty user ${name} for ${dept}`);
+      await logActivity(cleanEmail, "Registration", `Registered faculty user ${name} for ${dept}`);
       alert("Registered Successfully! 🚀");
       navigate("/");
     } catch (err) {

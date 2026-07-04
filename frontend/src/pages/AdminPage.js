@@ -187,14 +187,7 @@ function AdminPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("users");
 
-  // Auth Protection
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    if (!user || user.role !== "admin") {
-      alert("Access Denied: Admins Only");
-      navigate("/");
-    }
-  }, [navigate]);
+
 
   // Dropdown list
   const departments = [

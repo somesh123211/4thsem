@@ -338,7 +338,7 @@ function SubjectPage() {
       // SAME DEPT FACULTY
       const filteredFaculty = users.filter(
         u =>
-          u.role === "faculty" &&
+          (u.role === "faculty" || u.role === "hod") &&
           u.department?.toLowerCase() === dept?.toLowerCase()
       );
 
@@ -712,7 +712,7 @@ function SubjectPage() {
                       );
 
                       const otherFacultyList = allUsers.filter(
-                        u => u.role === "faculty" && u.department === sub.otherDept
+                        u => (u.role === "faculty" || u.role === "hod") && u.department === sub.otherDept
                       );
 
                       return (

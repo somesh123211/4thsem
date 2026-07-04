@@ -117,13 +117,23 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
     if not batch_labs:
         return
 
-    # ✅ KEEP YOUR ORIGINAL SESSION LOGIC
-    subject_sessions = []
+    # Build list of UNIQUE lab subjects (deduped, preserving order)
+    unique_lab_names = []
     for s in batch_labs:
-        for _ in range(s["hours"] // 2):
-            subject_sessions.append(s["subject_name"])
+        if s["subject_name"] not in unique_lab_names:
+            unique_lab_names.append(s["subject_name"])
 
-    total_rounds = len(subject_sessions)
+    # sessions per lab = hours // 2  (each session = 2 consecutive hours)
+    # If labs have different hours, use the max
+    sessions_per_lab = max(s["hours"] // 2 for s in batch_labs)
+
+    # Total timetable 2-hour blocks = sessions_per_lab
+    # e.g. ML LAB 4hrs + SEPM LAB 4hrs, 2 batches → sessions_per_lab=2
+    # Block 1: B1→ML LAB, B2→SEPM LAB
+    # Block 2: B1→SEPM LAB, B2→ML LAB  (swapped)
+    total_rounds = sessions_per_lab
+
+    print(f"  [BatchLab] unique_labs={unique_lab_names}, sessions_per_lab={sessions_per_lab}, total_rounds={total_rounds}, batches={batches}")
 
     # 🔥 FIX: controlled distribution
     day_lab_count = {d: 0 for d in range(DAYS)}
@@ -144,9 +154,11 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
         batch_assignments = []
 
         for b in range(batches):
-
-            subject_index = (round_index + b) % len(subject_sessions)
-            sub = subject_sessions[subject_index]
+            # Rotate which lab each batch does per round
+            # Round 0: B0→lab[0], B1→lab[1], B2→lab[2]
+            # Round 1: B0→lab[1], B1→lab[2], B2→lab[0]  ← alternated!
+            lab_idx = (b + round_index) % len(unique_lab_names)
+            sub = unique_lab_names[lab_idx]
 
             teacher, teacherId = get_teacher(sub, subjects)
             room = get_lab(sub, subjects)
@@ -158,7 +170,7 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
 
             batch_assignments.append((b, sub, teacher, teacherId, room))
 
-        # ✅ PLACE
+        # ✅ PLACE all batches in this 2-hour block simultaneously
         for b, sub, teacher, teacherId, room in batch_assignments:
 
             entry = {
@@ -185,7 +197,7 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
 
     VALID_LAB_STARTS = [0, 2, 4]
 
-    # 🔥 FIX: STRICT MON–FRI DISTRIBUTION
+    # 🔥 STRICT MON–FRI DISTRIBUTION — one block per round
     preferred_days = [0,1,2,3,4]  # Mon–Fri
     random.shuffle(preferred_days)
 
