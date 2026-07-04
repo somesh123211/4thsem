@@ -215,7 +215,12 @@ function GenerateTimetable() {
       snap.forEach(docSnap => {
         const d = docSnap.data();
         if (d?.timetable) {
-          existing.push({ id: docSnap.id, ...d.timetable });
+          existing.push({
+            id: docSnap.id,
+            className: d.className || "",
+            department: d.department || "",
+            ...d.timetable
+          });
         }
       });
 

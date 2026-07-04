@@ -129,11 +129,12 @@ def is_common_lab(s):
 
 
 def is_theory(s):
-    return s["type"] == "theory"
+    return s["type"] == "theory" and not s.get("elective_group")
 
 
 def is_batch_theory(s):
-    return s["type"] == "theory" and s["batch_required"] in ["yes", "true", "1"]
+    return s["type"] == "theory" and s["batch_required"] in ["yes", "true", "1"] and not s.get("elective_group")
+
 
 
 def get_batches(subjects):

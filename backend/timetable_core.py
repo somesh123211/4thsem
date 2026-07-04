@@ -123,22 +123,19 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
         if s["subject_name"] not in unique_lab_names:
             unique_lab_names.append(s["subject_name"])
 
-    # sessions per lab = hours // 2  (each session = 2 consecutive hours)
-    # If labs have different hours, use the max
-    sessions_per_lab = max(s["hours"] // 2 for s in batch_labs)
+    # Total timetable 2-hour blocks = number of unique labs (one full rotation)
+    # e.g. 2 labs (ML, SEPM) with 2 batches -> total_rounds = 2
+    # e.g. 3 labs (OOP, DBMS, DS) with 3 batches -> total_rounds = 3
+    total_rounds = len(unique_lab_names)
 
-    # Total timetable 2-hour blocks = sessions_per_lab
-    # e.g. ML LAB 4hrs + SEPM LAB 4hrs, 2 batches → sessions_per_lab=2
-    # Block 1: B1→ML LAB, B2→SEPM LAB
-    # Block 2: B1→SEPM LAB, B2→ML LAB  (swapped)
-    total_rounds = sessions_per_lab
+    print(f"  [BatchLab] unique_labs={unique_lab_names}, total_rounds={total_rounds}, batches={batches}")
 
-    print(f"  [BatchLab] unique_labs={unique_lab_names}, sessions_per_lab={sessions_per_lab}, total_rounds={total_rounds}, batches={batches}")
+
 
     # 🔥 FIX: controlled distribution
     day_lab_count = {d: 0 for d in range(DAYS)}
 
-    def try_place(d, s, round_index):
+    def try_place(d, s, round_index, check_teachers=True):
 
         if s + 1 >= SLOTS:
             return False
@@ -163,10 +160,14 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
             teacher, teacherId = get_teacher(sub, subjects)
             room = get_lab(sub, subjects)
 
-            if not is_valid_global(teacherId, room, d, s, teacher_busy, room_busy):
+            # Room busy must always be checked
+            if room in room_busy and (slot1 in room_busy[room] or slot2 in room_busy[room]):
                 return False
-            if not is_valid_global(teacherId, room, d, s+1, teacher_busy, room_busy):
-                return False
+
+            # Teacher busy is checked only if check_teachers is True
+            if check_teachers:
+                if teacherId in teacher_busy and (slot1 in teacher_busy[teacherId] or slot2 in teacher_busy[teacherId]):
+                    return False
 
             batch_assignments.append((b, sub, teacher, teacherId, room))
 
@@ -198,59 +199,76 @@ def place_batch_labs(tt, batch_labs, batches, subjects, teacher_busy=None, room_
     VALID_LAB_STARTS = [0, 2, 4]
 
     # 🔥 STRICT MON–FRI DISTRIBUTION — one block per round
-    preferred_days = [0,1,2,3,4]  # Mon–Fri
-    random.shuffle(preferred_days)
+    preferred_days = [0, 1, 2, 3, 4]  # Mon–Fri
 
     for round_index in range(total_rounds):
 
         placed = False
 
-        # ✅ STEP 1: Try ONE lab per day (Mon–Fri)
-        for d in preferred_days:
+        # We try two passes for each round:
+        # Pass 1: Try to place strictly (respecting teacher busy lists)
+        # Pass 2: Relaxed fallback (ignore teacher busy lists)
+        for check_teachers in [True, False]:
 
-            if day_lab_count[d] >= 1:
-                continue
+            random.shuffle(preferred_days)
 
-            random.shuffle(VALID_LAB_STARTS)
-
-            for s in VALID_LAB_STARTS:
-                if try_place(d, s, round_index):
-                    placed = True
-                    break
-
-            if placed:
-                break
-
-        # ✅ STEP 2: Allow second lab if needed
-        if not placed:
+            # ✅ STEP 1: Try ONE lab per day (Mon–Fri)
             for d in preferred_days:
 
-                if day_lab_count[d] >= 2:
+                if day_lab_count[d] >= 1:
                     continue
 
+                random.shuffle(VALID_LAB_STARTS)
+
                 for s in VALID_LAB_STARTS:
-                    if try_place(d, s, round_index):
+                    if try_place(d, s, round_index, check_teachers):
                         placed = True
                         break
 
                 if placed:
                     break
 
-        # ✅ STEP 3: LAST fallback (anywhere)
-        if not placed:
-           for d in range(DAYS):
+            if placed:
+                break
 
-        # 🚫 HARD LIMIT → MAX 2 LABS PER DAY
-               if day_lab_count[d] >= 2:
-                  continue
+            # ✅ STEP 2: Allow second lab per day (Mon–Fri)
+            for d in preferred_days:
 
-               for s in VALID_LAB_STARTS:
-                   if try_place(d, s, round_index):
-                       placed = True
-                       break
+                if day_lab_count[d] >= 2:
+                    continue
 
-               if placed:
-                   break
+                random.shuffle(VALID_LAB_STARTS)
+
+                for s in VALID_LAB_STARTS:
+                    if try_place(d, s, round_index, check_teachers):
+                        placed = True
+                        break
+
+                if placed:
+                    break
+
+            if placed:
+                break
+
+            # ✅ STEP 3: LAST fallback (anywhere, including Saturday)
+            for d in range(DAYS):
+
+                # 🚫 HARD LIMIT → MAX 2 LABS PER DAY
+                if day_lab_count[d] >= 2:
+                    continue
+
+                random.shuffle(VALID_LAB_STARTS)
+
+                for s in VALID_LAB_STARTS:
+                    if try_place(d, s, round_index, check_teachers):
+                        placed = True
+                        break
+
+                if placed:
+                    break
+
+            if placed:
+                break
 
         if not placed:
             print(f"WARNING: Batch lab NOT placed round {round_index}")
@@ -588,7 +606,7 @@ def fill_empty_slots(tt, subjects, teacher_busy=None, room_busy=None):
 
     theory_subjects = [
         s for s in subjects 
-        if s["type"] == "theory" and s["subject_name"].strip().lower() != "mdm" and not is_batch_theory(s)
+        if s["type"] == "theory" and s["subject_name"].strip().lower() != "mdm" and not is_batch_theory(s) and not s.get("elective_group")
     ]
     for d in range(DAYS):
 
@@ -753,69 +771,97 @@ def place_elective_groups(tt, elective_groups, subjects, teacher_busy=None, room
 
         # Get hours from the group subjects
         hours = group_subs[0].get("hours", 3)
+        placed_days = set()
 
         for _ in range(hours):
             placed = False
 
-            all_slots = []
-            for d in range(DAYS):
-                for s in range(SLOTS):
-                    all_slots.append((d, s))
-            random.shuffle(all_slots)
+            # We try two passes:
+            # Pass 1: Try placing on a different day (avoid same-day repeat) and not consecutive
+            # Pass 2: Fallback (allow same-day repeat but strictly NOT consecutive)
+            for pass_num in [1, 2]:
+                all_slots = []
+                for d in range(DAYS):
+                    for s in range(SLOTS):
+                        all_slots.append((d, s))
+                random.shuffle(all_slots)
 
-            for d, s in all_slots:
-                # 🚫 DO NOT TOUCH LAB SLOT
-                if is_lab_slot(tt, d, s):
-                    continue
+                for d, s in all_slots:
+                    # Pass 1: check if day already used
+                    if pass_num == 1 and d in placed_days:
+                        continue
 
-                # 🚫 must be empty
-                if not is_full_slot_empty(tt, d, s):
-                    continue
+                    # 🚫 DO NOT TOUCH LAB SLOT
+                    if is_lab_slot(tt, d, s):
+                        continue
 
-                slot_code = get_slot_code(d, s)
+                    # 🚫 must be empty
+                    if not is_full_slot_empty(tt, d, s):
+                        continue
 
-                # Check teacher and room clash constraints for all option subjects in this PE group
-                possible = True
-                batch_assignments = []
-                for sub_obj in group_subs:
-                    sub_name = sub_obj["subject_name"]
-                    teacher, teacherId = get_teacher(sub_name, subjects)
-                    room = sub_obj.get("room", "CLASS")
+                    # 🚫 Check consecutive (back-to-back) same elective group
+                    is_consecutive = False
+                    for adj_s in [s-1, s+1]:
+                        if 0 <= adj_s < SLOTS:
+                            adj_slot = tt[d][adj_s]
+                            if adj_slot and isinstance(adj_slot.get("COMMON"), dict):
+                                adj_sub = adj_slot["COMMON"].get("subject", "")
+                                # If any subject of this elective group is in the adjacent slot's subject name
+                                if any(sub_obj["subject_name"] in adj_sub for sub_obj in group_subs):
+                                    is_consecutive = True
+                                    break
+                    if is_consecutive:
+                        continue
 
-                    if not is_valid_global(teacherId, room, d, s, teacher_busy, room_busy):
-                        possible = False
+                    slot_code = get_slot_code(d, s)
+
+                    # Check teacher and room clash constraints for all option subjects in this PE group
+                    possible = True
+                    batch_assignments = []
+                    for sub_obj in group_subs:
+                        sub_name = sub_obj["subject_name"]
+                        teacher, teacherId = get_teacher(sub_name, subjects)
+                        room = sub_obj.get("room", "CLASS")
+
+                        if not is_valid_global(teacherId, room, d, s, teacher_busy, room_busy):
+                            possible = False
+                            break
+
+                        batch_assignments.append((sub_name, teacher, teacherId, room))
+
+                    if possible:
+                        # Place all elective choices parallelly under COMMON
+                        merged_names = [item[0] for item in batch_assignments]
+                        merged_teachers = [item[1] for item in batch_assignments]
+                        merged_teacher_ids = [item[2] for item in batch_assignments]
+                        merged_rooms = [item[3] for item in batch_assignments]
+
+                        entry = {
+                            "subject": " / ".join(merged_names),
+                            "teacher": " / ".join(merged_teachers),
+                            "teacherId": "/".join(merged_teacher_ids),
+                            "type": "theory",
+                            "room": " / ".join(merged_rooms),
+                            "slot": slot_code
+                        }
+
+                        tt[d][s]["COMMON"] = entry
+                        placed_days.add(d)
+
+                        # Apply busy tags
+                        for sub_name, teacher, teacherId, room in batch_assignments:
+                            teacher_busy.setdefault(teacherId, set()).add(slot_code)
+                            room_busy.setdefault(room, set()).add(slot_code)
+
+                        placed = True
                         break
 
-                    batch_assignments.append((sub_name, teacher, teacherId, room))
-
-                if possible:
-                    # Place all elective choices parallelly under COMMON
-                    merged_names = [item[0] for item in batch_assignments]
-                    merged_teachers = [item[1] for item in batch_assignments]
-                    merged_teacher_ids = [item[2] for item in batch_assignments]
-                    merged_rooms = [item[3] for item in batch_assignments]
-
-                    entry = {
-                        "subject": " / ".join(merged_names),
-                        "teacher": " / ".join(merged_teachers),
-                        "teacherId": "/".join(merged_teacher_ids),
-                        "type": "theory",
-                        "room": " / ".join(merged_rooms),
-                        "slot": slot_code
-                    }
-
-                    tt[d][s]["COMMON"] = entry
-
-                    # Apply busy tags
-                    for sub_name, teacher, teacherId, room in batch_assignments:
-                        teacher_busy.setdefault(teacherId, set()).add(slot_code)
-                        room_busy.setdefault(room, set()).add(slot_code)
-
-                    placed = True
+                if placed:
                     break
 
             if not placed:
                 print(f"WARNING: PE Elective group {group_name} slot NOT placed")
+
 
 
 # MAIN

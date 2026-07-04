@@ -577,6 +577,32 @@ function SubjectPage() {
     });
   };
 
+  const handleAddPeGroup = () => {
+    if (isLocked) return;
+    setPeGroups(prev => {
+      const nextGroupNum = prev.length + 4; // PE 4, PE 5, etc.
+      return [
+        ...prev,
+        {
+          id: `pe_${Date.now()}`,
+          groupName: `PE ${nextGroupNum}`,
+          hours: "3",
+          subjects: [
+            { name: "", code: "", faculty: "", otherDept: "", otherFaculty: "", room: "" },
+            { name: "", code: "", faculty: "", otherDept: "", otherFaculty: "", room: "" }
+          ]
+        }
+      ];
+    });
+  };
+
+  const handleRemovePeGroup = (groupIndex) => {
+    if (isLocked) return;
+    const confirmDelete = window.confirm("Are you sure you want to delete this PE group and all its subjects?");
+    if (!confirmDelete) return;
+    setPeGroups(prev => prev.filter((_, idx) => idx !== groupIndex));
+  };
+
   // ============================================================
   // 🔥 SAVE DATA
   // ============================================================
@@ -715,6 +741,10 @@ function SubjectPage() {
                     <button className="btn btn-outline" onClick={handleAddNewRow}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                       Add Row
+                    </button>
+                    <button className="btn btn-outline" onClick={handleAddPeGroup}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      Add PE Group
                     </button>
                     <button className="btn btn-outline" onClick={handleReset}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
@@ -1001,13 +1031,22 @@ function SubjectPage() {
                       />
                     </div>
                     {!isLocked && (
-                      <button 
-                        className="btn btn-outline" 
-                        style={{ padding: "6px 12px", fontSize: "13px" }}
-                        onClick={() => handleAddPeSubject(gIdx)}
-                      >
-                        + Add Subject Option
-                      </button>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button 
+                          className="btn btn-outline" 
+                          style={{ padding: "6px 12px", fontSize: "13px" }}
+                          onClick={() => handleAddPeSubject(gIdx)}
+                        >
+                          + Add Subject Option
+                        </button>
+                        <button 
+                          className="btn btn-danger" 
+                          style={{ padding: "6px 12px", fontSize: "13px", backgroundColor: "#ef4444" }}
+                          onClick={() => handleRemovePeGroup(gIdx)}
+                        >
+                          Delete Group
+                        </button>
+                      </div>
                     )}
                   </div>
 

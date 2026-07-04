@@ -56,8 +56,8 @@ def check_clash():
 
     from collections import defaultdict
 
-    teacher_busy = defaultdict(set)
-    room_busy = defaultdict(set)
+    teacher_busy = defaultdict(dict)
+    room_busy = defaultdict(dict)
 
     DAYS = 6
     SLOTS = 6
@@ -77,6 +77,23 @@ def check_clash():
 
             if isinstance(ett, dict) and ett.get("id") == current_id:
                 continue
+
+            dept_name = ett.get("department")
+            year_name = ett.get("className")
+
+            if (not dept_name or not year_name) and ett.get("id"):
+                parts = ett.get("id").split("_")
+                if len(parts) >= 2:
+                    dept_name = dept_name or parts[0]
+                    year_name = year_name or parts[1]
+
+            dept_name = dept_name or "Unknown Dept"
+            year_name = year_name or "Unknown Year"
+
+            if "year" in year_name.lower():
+                meta = f"{dept_name} {year_name}"
+            else:
+                meta = f"{dept_name} {year_name} Year"
 
             for d in range(DAYS):
                 for s in range(SLOTS):
@@ -116,19 +133,15 @@ def check_clash():
                                 t_clean = t.strip()
                                 if t_clean:
                                     for sc in slots:
-                                        teacher_busy[t_clean].add(sc)
+                                        teacher_busy[t_clean][sc] = meta
 
-                        # 🔥 ROOM (Only check for labs)
-                        is_entry_lab = typ == "lab" or "lab" in subject
-                        if room and is_entry_lab:
-                            if room == "CLASS":
-                                pass
-                            else:
-                                for r in room.split("/"):
-                                    r_clean = r.strip()
-                                    if r_clean:
-                                        for sc in slots:
-                                            room_busy[r_clean].add(sc)
+                        # 🔥 ROOM (Check all rooms except standard defaults)
+                        if room:
+                            for r in room.split("/"):
+                                r_clean = r.strip()
+                                if r_clean and r_clean.upper() not in ["CLASS", "LIBRARY", "CLASSROOM"]:
+                                    for sc in slots:
+                                        room_busy[r_clean][sc] = meta
 
     load_existing()
 
@@ -180,28 +193,26 @@ def check_clash():
                     if t_clean:
                         for sc in slots:
                             if sc in teacher_busy[t_clean]:
+                                colliding_with = teacher_busy[t_clean][sc]
                                 return jsonify({
                                     "success": False,
-                                    "message": f"Teacher clash for {t_clean} at {sc}"
+                                    "message": f"Teacher clash for {t_clean} at {sc} with {colliding_with}"
                                 })
 
             # =========================
             # 🔴 ROOM CHECK
             # =========================
-            is_entry_lab = typ == "lab" or "lab" in subject
-            if room and is_entry_lab:
-                if room == "CLASS":
-                    pass
-                else:
-                    for r in room.split("/"):
-                        r_clean = r.strip()
-                        if r_clean:
-                            for sc in slots:
-                                if sc in room_busy[r_clean]:
-                                    return jsonify({
-                                        "success": False,
-                                        "message": f"Room clash for {r_clean} at {sc}"
-                                    })
+            if room:
+                for r in room.split("/"):
+                    r_clean = r.strip()
+                    if r_clean and r_clean.upper() not in ["CLASS", "LIBRARY", "CLASSROOM"]:
+                        for sc in slots:
+                            if sc in room_busy[r_clean]:
+                                colliding_with = room_busy[r_clean][sc]
+                                return jsonify({
+                                    "success": False,
+                                    "message": f"Room clash for {r_clean} at {sc} with {colliding_with}"
+                                })
 
     return jsonify({"success": True})
 
