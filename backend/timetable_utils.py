@@ -58,10 +58,10 @@ def build_constraints(existing_timetables):
                                 if t_clean:
                                     teacher_busy.setdefault(t_clean, set()).add(sl)
 
-                        if room and is_lab:
+                        if room:
                             for r in room.split("/"):
                                 r_clean = r.strip()
-                                if r_clean:
+                                if r_clean and r_clean.upper() not in ["CLASS", "LIBRARY", "CLASSROOM"]:
                                     room_busy.setdefault(r_clean, set()).add(sl)
 
     return teacher_busy, room_busy

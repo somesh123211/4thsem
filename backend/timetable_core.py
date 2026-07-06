@@ -869,7 +869,7 @@ def place_elective_groups(tt, elective_groups, subjects, teacher_busy=None, room
 import time
 import random
 
-def generate_timetable(subjects, existing_timetables=None):
+def generate_timetable(subjects, existing_timetables=None, year=None):
     
     # 🔥 RANDOM SEED
     random.seed(time.time())
@@ -877,6 +877,21 @@ def generate_timetable(subjects, existing_timetables=None):
     # normalize + shuffle
     subjects = normalize(subjects)
     random.shuffle(subjects)
+
+    # Identify the year of the timetable we are generating
+    if year:
+        year = str(year).strip().lower()
+    else:
+        for s in subjects:
+            if s.get("year"):
+                year = str(s.get("year")).strip().lower()
+                break
+
+    is_first_year = (year == "1st")
+
+    if is_first_year:
+        # Remove MDM from subjects if present
+        subjects = [s for s in subjects if s.get("subject_name", "").strip().lower() != "mdm"]
 
     teacher_busy, room_busy = build_constraints(existing_timetables or [])
     print("DEBUG constraints - teacher_busy:")
@@ -890,26 +905,29 @@ def generate_timetable(subjects, existing_timetables=None):
     # 🔥 FINAL MDM LOGIC
     # =========================
 
-    # 1️⃣ Get from existing timetable
-    mdm_slots = get_mdm_fixed_slots(existing_timetables or [])
+    if is_first_year:
+        mdm_slots = set()
+    else:
+        # 1️⃣ Get from existing timetable
+        mdm_slots = get_mdm_fixed_slots(existing_timetables or [])
 
-    # 2️⃣ If NOT present → generate from DB
-    if not mdm_slots:
+        # 2️⃣ If NOT present → generate from DB
+        if not mdm_slots:
 
-        mdm_hours = 0
+            mdm_hours = 0
 
-        for s in subjects:
-            if s["subject_name"].strip().lower() == "mdm":
-                mdm_hours = s["hours"]
-                break
+            for s in subjects:
+                if s["subject_name"].strip().lower() == "mdm":
+                    mdm_hours = s["hours"]
+                    break
 
-        if mdm_hours > 0:
-            days = [0, 1, 2, 3, 4]  # Mon–Fri
-            random.shuffle(days)
+            if mdm_hours > 0:
+                days = [0, 1, 2, 3, 4]  # Mon–Fri
+                random.shuffle(days)
 
-            for i in range(min(mdm_hours, len(days))):
-                d = days[i]
-                mdm_slots.add(get_slot_code(d, 3))  # fixed slot
+                for i in range(min(mdm_hours, len(days))):
+                    d = days[i]
+                    mdm_slots.add(get_slot_code(d, 3))  # fixed slot
 
     # =========================
     # 🔥 REMOVE CONSECUTIVE MDM

@@ -24,13 +24,15 @@ def generate():
 
     subjects = data.get("subjects", [])
     existing = data.get("existing_timetables", [])   # 🔥 NEW
+    year = data.get("year")                          # 🔥 NEW
 
     print("Subjects count:", len(subjects))
     for s in subjects:
         print(f"  [Subject] name: {s.get('subject_name')}, type: {s.get('type')}, batch_req: {s.get('batch_required') or s.get('batchRequired')}, hours: {s.get('hours')}, room: {s.get('room')}, batches: {s.get('batches')}")
     print("Existing Timetables:", len(existing))
+    print("Year:", year)
 
-    timetable = generate_timetable(subjects, existing)  # 🔥 UPDATED
+    timetable = generate_timetable(subjects, existing, year)  # 🔥 UPDATED
 
     return jsonify({"timetable": timetable})
 

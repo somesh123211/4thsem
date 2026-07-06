@@ -7,6 +7,7 @@ import SubjectPage from "./pages/SubjectPage";
 import GenerateTimetable from "./pages/GenerateTimetable";
 import ViewTimetable from "./pages/ViewTimetable";
 import AdminPage from "./pages/AdminPage";
+import CustomAlertProvider from "./components/CustomAlertProvider";
 
 // ✅ Route guard — only allows admin role through
 function ProtectedAdminRoute() {
@@ -19,18 +20,20 @@ function ProtectedAdminRoute() {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/hod-dashboard" element={<HODDashboard />} />
-        <Route path="/subjects/:year" element={<SubjectPage />} />
-        <Route path="/generate" element={<GenerateTimetable />} />
-        <Route path="/view/:id" element={<ViewTimetable />} />
-        <Route path="/admin" element={<ProtectedAdminRoute />} />
-      </Routes>
-    </Router>
+    <CustomAlertProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/hod-dashboard" element={<HODDashboard />} />
+          <Route path="/subjects/:year" element={<SubjectPage />} />
+          <Route path="/generate" element={<GenerateTimetable />} />
+          <Route path="/view/:id" element={<ViewTimetable />} />
+          <Route path="/admin" element={<ProtectedAdminRoute />} />
+        </Routes>
+      </Router>
+    </CustomAlertProvider>
   );
 }
 

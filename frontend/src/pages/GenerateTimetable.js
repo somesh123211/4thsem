@@ -158,6 +158,12 @@ function GenerateTimetable() {
         })
         .filter(s => s.dept === user?.department && s.year === year);
 
+      if (subjects.length === 0) {
+        alert("Data not available. Please fill subject data.");
+        setLoading(false);
+        return;
+      }
+
       const snapshotTT = await getDocs(collection(db, "timetables"));
       const docId = `${user?.department}_${year}`;
       const existing = snapshotTT.docs
@@ -169,7 +175,7 @@ function GenerateTimetable() {
       const res = await fetch(`${API}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subjects, existing_timetables: existing })
+        body: JSON.stringify({ subjects, existing_timetables: existing, year })
       });
 
       const data = await res.json();
