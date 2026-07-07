@@ -228,7 +228,7 @@ def send_brevo_otp(email, name, otp):
     api_key = os.environ.get("BREVO_API_KEY", "").strip()
     if not api_key:
         print("BREVO_API_KEY not found in environment!")
-        return False
+        return False, "BREVO_API_KEY not found in environment!"
         
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
@@ -330,19 +330,28 @@ def send_brevo_otp(email, name, otp):
     }
 
     try:
+        import ssl
+        import urllib.error
+        context = ssl._create_unverified_context()
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
             method="POST"
         )
-        with urllib.request.urlopen(req) as res:
+        with urllib.request.urlopen(req, context=context) as res:
             res_body = res.read().decode("utf-8")
             print("Brevo send success:", res_body)
-            return True
+            return True, "Success"
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8") if e.fp else str(e)
+        print("Brevo HTTPError:", err_msg)
+        return False, f"Brevo HTTP Error: {err_msg}"
     except Exception as e:
         print("Error sending email via Brevo:", str(e))
-        return False
+        import traceback
+        traceback.print_exc()
+        return False, f"Brevo Exception: {str(e)}"
 
 @app.route("/send-otp", methods=["POST"])
 def send_otp():
@@ -359,11 +368,11 @@ def send_otp():
         "name": name
     }
     
-    success = send_brevo_otp(email, name, otp)
+    success, message = send_brevo_otp(email, name, otp)
     if success:
         return jsonify({"success": True, "message": "OTP sent successfully"})
     else:
-        return jsonify({"success": False, "message": "Failed to send email verification code"}), 500
+        return jsonify({"success": False, "message": f"Failed to send email verification code: {message}"}), 500
 
 @app.route("/verify-otp", methods=["POST"])
 def verify_otp():
