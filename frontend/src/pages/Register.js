@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db, logActivity } from "../firebase";
 import { doc, setDoc } from "firebase/firestore";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API = process.env.REACT_APP_API_URL || "";
 
 function Register() {
   const [name, setName] = useState("");

@@ -15,7 +15,7 @@ import {
   Droppable,
   Draggable
 } from "@hello-pangea/dnd";
-const API = process.env.REACT_APP_API_URL;
+const API = process.env.REACT_APP_API_URL || "";
 
 function GenerateTimetable() {
   const navigate = useNavigate();

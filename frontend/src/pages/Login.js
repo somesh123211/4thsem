@@ -240,7 +240,7 @@ function Login() {
 
   const navigate = useNavigate();
 
-  const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+  const API = process.env.REACT_APP_API_URL || "";
   const ADMIN_EMAIL = "someshninawe61@gmail.com";
 
   // ============================
