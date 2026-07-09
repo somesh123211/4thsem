@@ -228,7 +228,9 @@ def send_brevo_otp(email, name, otp):
     api_key = os.environ.get("BREVO_API_KEY", "").strip()
     if not api_key:
         print("BREVO_API_KEY not found in environment!")
-        return False, "BREVO_API_KEY not found in environment!"
+        has_brevo = "BREVO_API_KEY" in os.environ
+        other_keys = [k for k in os.environ.keys() if not any(x in k.upper() for x in ["KEY", "SECRET", "PASSWORD", "TOKEN", "FIREBASE"])]
+        return False, f"BREVO_API_KEY not found in environment! (Exists in os.environ: {has_brevo}, Other env keys: {other_keys})"
         
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
