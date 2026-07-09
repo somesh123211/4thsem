@@ -241,7 +241,8 @@ function Login() {
   const navigate = useNavigate();
 
   const API = process.env.REACT_APP_API_URL || "";
-  const ADMIN_EMAIL = "someshninawe61@gmail.com";
+  const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "admin@college.edu";
+  const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD || "Admin@123";
 
   // ============================
   // 🔐 HANDLE LOGIN
@@ -253,13 +254,13 @@ function Login() {
     }
 
     // 🔒 Admin Bypass — first verify credentials, THEN send OTP
-    if (email.toLowerCase().trim() === ADMIN_EMAIL && password === "Somesh@123") {
+    if (email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim() && password === ADMIN_PASSWORD) {
       setSendingAdminOtp(true);
       try {
         const res = await fetch(`${API}/send-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: ADMIN_EMAIL, name: "Admin Somesh" })
+          body: JSON.stringify({ email: ADMIN_EMAIL, name: "College Admin" })
         });
         const data = await res.json();
         if (data.success) {
@@ -348,12 +349,12 @@ function Login() {
         const finalUser = {
           id: "admin-id",
           email: ADMIN_EMAIL,
-          name: "Admin Somesh",
+          name: "College Admin",
           role: "admin",
           department: "ADMIN"
         };
         localStorage.setItem("user", JSON.stringify(finalUser));
-        await logActivity(ADMIN_EMAIL, "Admin Login", "Admin verified with OTP and logged in successfully.");
+        await logActivity(ADMIN_EMAIL, "Admin Login", "College Admin verified with OTP and logged in successfully.");
         alert("Welcome Admin 🚀");
         navigate("/admin");
       } else {

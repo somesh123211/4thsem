@@ -5,6 +5,7 @@ import { auth, db, logActivity } from "../firebase";
 import { doc, setDoc } from "firebase/firestore";
 
 const API = process.env.REACT_APP_API_URL || "";
+const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "admin@college.edu";
 
 function Register() {
   const [name, setName] = useState("");
@@ -44,7 +45,7 @@ function Register() {
     }
 
     // Bypass OTP only for the admin email
-    if (email.trim().toLowerCase() === "someshninawe61@gmail.com") {
+    if (email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
       await handleCompleteRegistration();
       return;
     }
